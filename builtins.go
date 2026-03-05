@@ -2779,6 +2779,8 @@ func builtinType(sh *Shell, args []string) (*Result, bool, error) {
 }
 func isBuiltin(cmd string) bool {
 	builtins := []string{
+		"select", "where", "limit", "skip", "grep", "sort", "count", "unique", "fmt", "add", "rename",
+
 		// Navigation
 		"cd", "pwd", "pushd", "popd", "dirs",
 

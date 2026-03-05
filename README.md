@@ -4,12 +4,16 @@
 
 ```
   ╔══════════════════════════════════════════════════════╗
-  ║  Katsh  ·  Structured Shell  ·  v0.3.0           ║
-  ║  Everything is data. Every output is a table.       ║
+  ║  Katsh  ·  Structured Shell  ·  v2.x.x               ║
+  ║  Everything is data. Every output is a table.        ║
   ╚══════════════════════════════════════════════════════╝
 ```
 
 Katsh is a terminal shell written in Go that turns every command output into a structured table you can filter, sort, and pipe — while also being a full scripting language with variables, loops, functions, pattern matching, and an import/export extension system.
+
+![help](./images/help.png)
+![piping](./images/piping.png)
+![xxd example](./images/xxd.png)
 
 ---
 
