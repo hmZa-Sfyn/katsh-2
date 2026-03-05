@@ -2777,25 +2777,82 @@ func builtinWhich(sh *Shell, args []string) (*Result, bool, error) {
 func builtinType(sh *Shell, args []string) (*Result, bool, error) {
 	return builtinWhich(sh, args)
 }
-
 func isBuiltin(cmd string) bool {
 	builtins := []string{
-		"cd", "pwd", "pushd", "popd", "dirs", "ls", "ll", "la", "tree", "du", "df",
-		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
-		"wc", "stat", "file", "find", "diff", "grep", "sed", "awk", "cut", "tr",
-		"sort", "uniq", "tee", "split", "xargs", "chmod", "chown",
-		"ps", "kill", "sleep", "jobs", "uname", "uptime", "date", "cal",
-		"hostname", "whoami", "id", "groups", "w", "who",
-		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
-		"md5sum", "sha1sum", "sha256sum", "md5", "sha1", "sha256",
+		// Navigation
+		"cd", "pwd", "pushd", "popd", "dirs",
+
+		// Listing
+		"ls", "ll", "la", "tree", "du", "df",
+
+		// File operations
+		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm",
+		"cp", "mv", "ln", "readlink", "realpath", "basename",
+		"dirname", "mktemp", "mkfifo",
+
+		// Inspection
+		"wc", "stat", "file", "find", "diff",
+
+		// Text processing
+		"grep", "sed", "awk", "cut", "tr", "sort", "uniq",
+		"split", "tee", "xargs", "nl", "fold", "expand",
+		"unexpand", "column", "paste", "comm", "shuf",
+		"numfmt", "reverse", "strings", "xxd", "od",
+
+		// Permissions
+		"chmod", "chown",
+
+		// Process management
+		"ps", "kill", "sleep", "jobs", "nice", "timeout",
+		"pgrep", "pkill", "nohup", "top", "lsof", "vmstat",
+		"iostat",
+
+		// System info
+		"uname", "uptime", "date", "cal", "hostname",
+		"whoami", "id", "groups", "who", "w", "free",
+		"lscpu", "lsusb", "lspci", "dmesg", "lsblk",
+		"mount", "umount", "blkid", "journalctl",
+		"systemctl", "service",
+
+		// Network
+		"ping", "curl", "wget", "nslookup", "dig",
+		"ifconfig", "ip", "ss", "netstat", "traceroute",
+		"mtr", "openssl", "ssh", "scp", "rsync",
+		"httpget", "httppost", "jq",
+
+		// Hashing
+		"md5sum", "md5", "sha1sum", "sha1", "sha256sum", "sha256",
+
+		// Archiving
 		"tar", "gzip", "gunzip", "zip", "unzip",
-		"echo", "printf", "yes", "seq", "base64", "rev",
+
+		// Text generation & math
+		"echo", "printf", "print", "println", "yes", "seq",
+		"base64", "bc", "factor", "random",
+
+		// Variables & environment
 		"set", "unset", "vars", "export", "env", "printenv",
-		"alias", "unalias", "aliases", "which", "type",
-		"bc", "factor", "random",
-		"box", "history", "clear", "help", "man", "true", "false",
-		"exit", "quit", "source", "watch",
+
+		// Import / export
+		"import",
+
+		// Scripting helpers
+		"eval", "exec", "test", "read", "mapfile", "declare",
+		"source", ".", "true", "false", "pass",
+
+		// Identification
+		"which", "type", "alias", "unalias", "aliases", "man",
+
+		// Box storage
+		"box",
+
+		// Fun
+		"figlet", "matrix", "lolcat", "drawbox", "notify",
+
+		// Session
+		"history", "watch", "clear", "help", "exit", "quit",
 	}
+
 	for _, b := range builtins {
 		if b == cmd {
 			return true
@@ -3447,4 +3504,3 @@ func osUsername() (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
-
