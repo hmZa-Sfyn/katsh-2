@@ -3155,153 +3155,250 @@ func builtinWatch(sh *Shell, args []string) (*Result, bool, error) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 func builtinHelp() (*Result, bool, error) {
-	help := "\n" + sectionHeader("StructSH — Structured Shell v0.2.0") + `
+	help := "\n" + sectionHeader("StructSH — Structured Shell v0.3.0") + `
   Every command output is a table. Chain transforms with | pipes.
-  Store any result in the Box with #=.
+  Store any result in the Box with #=.  Run scripts with import.
 
 ` + c(ansiBold+ansiCyan, "  ── NAVIGATION ────────────────────────────────────────────") + `
-  cd [dir|-]          change directory (- for previous)
-  pwd                 print working directory
-  pushd <dir>         push dir onto stack and cd
-  popd                pop stack and cd back
-  dirs                show directory stack
+  cd [dir|-]              change directory (- goes back)
+  pwd                     print working directory
+  pushd <dir>             push dir onto stack and cd
+  popd                    pop stack and cd back
+  dirs                    show directory stack
 
 ` + c(ansiBold+ansiCyan, "  ── LISTING ────────────────────────────────────────────────") + `
-  ls [-la] [dir]      list files as table
-  ll [dir]            ls -l shorthand
-  la [dir]            ls -la shorthand
-  tree [-L N] [dir]   visual directory tree
-  du [-s] [dir]       disk usage per entry
-  df                  filesystem usage
+  ls [-la] [dir]          list files as table
+  ll [dir]                ls -l shorthand
+  la [dir]                ls -la shorthand
+  tree [-L N] [dir]       visual directory tree
+  du [-s] [dir]           disk usage per entry
+  df                      filesystem usage
 
 ` + c(ansiBold+ansiCyan, "  ── FILE OPERATIONS ────────────────────────────────────────") + `
-  cat [-n] <file>     show file (optional line numbers)
-  head [-n N] <file>  first N lines
-  tail [-n N] <file>  last N lines
-  touch <file...>     create/update files (shows table)
-  mkdir [-p] <dir>    create directory
-  rmdir <dir>         remove empty directory
-  rm [-rf] <file>     remove files/dirs
-  cp [-rv] <src> <dst> copy file or dir
-  mv [-v] <src> <dst> move/rename
-  ln [-s] <tgt> <lnk> create hard/soft link
+  cat [-n] <file>         show file (optional line numbers)
+  head [-n N] <file>      first N lines
+  tail [-n N] <file>      last N lines
+  touch <file...>         create / update timestamps
+  mkdir [-p] <dir>        create directory
+  rmdir <dir>             remove empty directory
+  rm [-rf] <path>         remove files or directories
+  cp [-rv] <src> <dst>    copy file or directory
+  mv [-v] <src> <dst>     move / rename
+  ln [-s] <tgt> <lnk>    create hard or soft link
+  readlink <path...>      show symlink target → table
+  realpath <path...>      resolve absolute path → table
+  basename <path> [suf]   strip directory and suffix
+  dirname <path>          strip last component
+  mktemp [-d] [pattern]   create temp file or directory
+  mkfifo <name...>        create named pipe
 
 ` + c(ansiBold+ansiCyan, "  ── INSPECTION ─────────────────────────────────────────────") + `
-  wc [-lwc] <file>    word/line/byte count (table)
-  stat <file...>      file metadata as table
-  file <file...>      detect file type
-  find [dir] [-name pattern] [-type f|d] [-maxdepth N] [-newer file]
-  diff <file1> <file2> line-by-line diff as table
+  wc [-lwc] <file>        word / line / byte count → table
+  stat <file...>          file metadata → table
+  file <file...>          detect file type
+  find [dir] [-name pat] [-type f|d] [-maxdepth N] [-newer f]
+  diff <file1> <file2>    line-by-line diff → table
 
 ` + c(ansiBold+ansiCyan, "  ── TEXT PROCESSING ────────────────────────────────────────") + `
-  grep [-invr] <pat> <file>   regex search → table
-  sed 's/old/new/[g]' <file>  substitution
-  sed '/pat/d' <file>         delete matching lines
-  awk [-F sep] '{print $N}' <file>  field extract → table
-  cut -f N[-M] [-d sep] <file>      cut columns → table
-  tr <set1> <set2> <file>     transliterate characters
-  sort [-rnu] <file>          sort lines
-  uniq [-c] <file>            remove/count duplicates
-  split [-l N] <file> [prefix] split into chunks
-  tee <src> <dst>             copy and show file
-  xargs <cmd> <file>          run cmd per line in file
+  grep [-invr] <pat> <file>        regex search → table
+  sed 's/old/new/[g]' <file>       substitution
+  sed '/pat/d' <file>              delete matching lines
+  awk [-F sep] '{print $N}' <file> field extract → table
+  cut -f N[-M] [-d sep] <file>     cut columns → table
+  tr <set1> <set2> <file>          transliterate characters
+  sort [-rnu] <file>               sort lines
+  uniq [-c] <file>                 remove / count duplicates
+  split [-l N] <file> [prefix]     split into chunks
+  tee <src> <dst>                  copy and display file
+  xargs <cmd> <file>               run cmd per line
+  nl <file>                        number lines → table
+  fold [-w N] <file>               wrap long lines
+  expand <file>                    tabs → spaces
+  unexpand <file>                  spaces → tabs
+  column [-s sep] [-t] <file>      align columns → table
+  paste [-d sep] <f1> <f2>...      merge files side by side
+  comm <file1> <file2>             compare sorted files → table
+  shuf [-n N] <file>               randomise line order
+  numfmt [--to=iec|si] <num...>    format numbers → table
+  rev <file>                       reverse each line
+  strings [-n N] <file>            extract printable strings → table
+  xxd <file>                       hex dump → table
+  od <file>                        octal / hex dump (system)
 
 ` + c(ansiBold+ansiCyan, "  ── PERMISSIONS ────────────────────────────────────────────") + `
-  chmod <mode> <file...>   set permissions (numeric or u+x style)
-  chown <user> <file...>   change ownership (delegates to system)
+  chmod <mode> <file...>  set permissions (numeric or u+x)
+  chown <user> <file...>  change ownership
 
-` + c(ansiBold+ansiCyan, "  ── PROCESS ─────────────────────────────────────────────────") + `
-  ps [aux]              list processes (table)
-  kill [-SIG] <pid...>  send signal
-  sleep <seconds>       pause (max 60s)
-  jobs                  show background jobs
+` + c(ansiBold+ansiCyan, "  ── PROCESS MANAGEMENT ─────────────────────────────────────") + `
+  ps [aux]                list processes → table
+  kill [-SIG] <pid...>    send signal to process
+  sleep <seconds>         pause execution
+  jobs                    list background jobs
+  nice [-n N] <cmd>       run cmd with adjusted priority
+  timeout <secs> <cmd>    run cmd with time limit
+  pgrep <pattern>         find PIDs by name → table
+  pkill <pattern>         kill processes by name
+  nohup <cmd>             run cmd immune to hangup
+  top                     snapshot top processes → table
+  lsof [args]             list open files → table
+  vmstat                  virtual memory stats (system)
+  iostat                  I/O statistics (system)
 
 ` + c(ansiBold+ansiCyan, "  ── SYSTEM INFO ─────────────────────────────────────────────") + `
-  uname [-a]            OS and arch info
-  uptime                system uptime
-  date [+format]        current date/time (table or formatted)
-  cal [month] [year]    calendar
-  hostname [-i]         hostname and IP
-  whoami                current user
-  id                    uid/gid/groups table
-  groups                group membership
-  who / w               logged-in users
+  uname [-a]              OS / arch info
+  uptime                  system uptime
+  date [+format]          current date/time
+  cal [month] [year]      calendar
+  hostname [-i]           hostname and IP
+  whoami                  current user
+  id                      uid / gid / groups → table
+  groups                  group membership
+  who / w                 logged-in users → table
+  free                    memory usage → table
+  lscpu                   CPU info → table
+  lsusb                   USB devices (system)
+  lspci                   PCI devices (system)
+  dmesg                   kernel ring buffer → table
+  lsblk                   block devices (system)
+  mount [dev] [dir]       show or perform mounts → table
+  umount <dir>            unmount (system)
+  blkid                   block device IDs (system)
+  journalctl              systemd journal (system)
+  systemctl <cmd>         service manager (system)
+  service <name> <cmd>    SysV service control (system)
 
 ` + c(ansiBold+ansiCyan, "  ── NETWORK ─────────────────────────────────────────────────") + `
-  ping [-c N] <host>    ping (structured output)
-  curl [-o file] <url>  HTTP request
-  nslookup <host>       DNS lookup → table
-  ifconfig / ip         network interfaces → table
+  ping [-c N] <host>      ICMP ping → table
+  curl [-o f] <url>       HTTP request
+  wget <url>              download file
+  nslookup <host>         DNS lookup → table
+  dig <host>              DNS query (system)
+  ifconfig / ip           network interfaces → table
+  ss / netstat            socket / connection table
+  traceroute <host>       trace network path (system)
+  mtr <host>              live traceroute (system)
+  openssl <cmd>           TLS / crypto tool (system)
+  ssh <host>              secure shell (system)
+  scp <src> <dst>         secure copy (system)
+  rsync <src> <dst>       remote sync (system)
+  httpget <url>           GET request → table
+  httppost <url> <body>   POST request → table
+  jq <query> <file>       query JSON file → table
 
 ` + c(ansiBold+ansiCyan, "  ── HASHING ─────────────────────────────────────────────────") + `
-  md5sum / sha1sum / sha256sum <file...>   hash files → table
+  md5sum  / md5  <file...>     MD5 hash → table
+  sha1sum / sha1 <file...>     SHA-1 hash → table
+  sha256sum / sha256 <file...> SHA-256 hash → table
 
-` + c(ansiBold+ansiCyan, "  ── ARCHIVING (system) ──────────────────────────────────────") + `
-  tar, gzip, gunzip, zip, unzip  (delegated to system)
+` + c(ansiBold+ansiCyan, "  ── ARCHIVING ───────────────────────────────────────────────") + `
+  tar <flags> <archive> [files]  create / extract tar
+  gzip / gunzip <file>           compress / decompress
+  zip / unzip <archive> [files]  zip archive
 
 ` + c(ansiBold+ansiCyan, "  ── TEXT GENERATION ────────────────────────────────────────") + `
-  echo [-ne] <text>     print text
-  printf <fmt> [args]   formatted print
-  yes [word]            repeat word (20 lines)
-  seq [first [step]] last   number sequence → table
-  base64 [-d] <file>    encode/decode base64
-  rev <file>            reverse each line
+  echo [-ne] <text>            print text
+  printf <fmt> [args]          formatted print
+  print / println <text>       print from script (with indent)
+  yes [word]                   repeat word (20 lines)
+  seq [first [step]] last      number sequence → table
+  base64 [-d] <file>           encode / decode base64
+  bc <expr>                    evaluate math expression
+  factor <n>                   prime factorisation
+  random [max [min [count]]]   random numbers → table
 
 ` + c(ansiBold+ansiCyan, "  ── VARIABLES & ENVIRONMENT ────────────────────────────────") + `
-  set NAME=VAL          set session variable
-  unset NAME            remove variable
-  vars                  list session variables
-  export NAME=VAL       set and export to OS env
-  env / printenv        show environment variables
+  set NAME=VAL            set session variable
+  unset NAME              remove session variable
+  vars                    list all session variables → table
+  export NAME=VAL         set variable + export to OS env
+  export <name>           export existing var or func
+  env / printenv          show OS environment → table
+
+` + c(ansiBold+ansiCyan, "  ── IMPORT / EXPORT (extensions) ───────────────────────────") + `
+  import "file.ssh"       source a local script file
+  import "https://..."    fetch + cache remote script (24 h TTL)
+  import "user/repo/path" fetch from GitHub (raw)
+  export func <name>      mark function as exported
+  export <VAR>=<val>      set + export environment variable
+
+` + c(ansiBold+ansiCyan, "  ── SCRIPTING HELPERS ───────────────────────────────────────") + `
+  eval <expr>             evaluate a string as a command
+  exec <cmd> [args]       replace shell with command
+  test <expr>  /  [ ]     evaluate condition (exit 0/1)
+  read [-p prompt] [var]  read a line from stdin
+  mapfile [var]           read stdin lines into array var
+  declare [-a|-i|-x] var  declare variable type
+  source / . <file>       run script in current shell
+  true / false            exit 0 / exit 1
+  pass                    no-op placeholder
 
 ` + c(ansiBold+ansiCyan, "  ── IDENTIFICATION ──────────────────────────────────────────") + `
-  which <cmd>           find command (alias/builtin/path)
-  type <cmd>            same as which
-  alias name=cmd        define alias
-  unalias name          remove alias
-  aliases               list all aliases
+  which <cmd>             find command in PATH → table
+  type <cmd>              show command type
+  alias name=cmd          define an alias
+  unalias name            remove an alias
+  aliases                 list all aliases → table
+  man <cmd>               short description / manual
 
-` + c(ansiBold+ansiCyan, "  ── NUMERIC & MISC ──────────────────────────────────────────") + `
-  bc <expr>             calculate expression
-  factor <n>            prime factorization
-  random [max [min [count]]]  random numbers → table
+` + c(ansiBold+ansiCyan, "  ── SCRIPTING LANGUAGE ──────────────────────────────────────") + `
+  x = 42  /  name = "hello $USER"   variable assignment
+  x++  x--  x += N  x -= N  x *= N  x /= N  x %= N  x **= N
+  arr = [1, 2, 3]   arr[] = val   arr[0] = val   arr.len
+  if cond: body; elif cond2: body2; else: body3
+  unless cond: body
+  match $x { case "a": ...  case >=10: ...  default: ... }
+  for x in range(0,10): body
+  for x in [a,b,c]: body
+  for x in ` + "`cmd`" + `: body
+  while cond: body
+  do { body } while cond  /  do { body } until cond
+  repeat N: body          (_i = current index)
+  try { body } catch e { ... } finally { ... }
+  func name(a, b) { return $a + $b }
+  cmd1 && cmd2  /  cmd1 || cmd2
+  ` + "`cmd`" + `  subshell capture (in any position)
 
 ` + c(ansiBold+ansiCyan, "  ── PIPE OPERATORS ─────────────────────────────────────────") + `
-  | select col1,col2    keep columns
-  | where col=val       filter rows  (= != > < >= <= ~)
-  | grep text           search all columns
-  | sort col [asc|desc] sort rows
-  | limit N             first N rows
-  | skip N              skip N rows
-  | count               count rows
-  | unique [col]        deduplicate
-  | reverse             flip order
-  | fmt json|csv|tsv    reformat output
-  | add col=value       add a column
-  | rename old=new      rename a column
+  | select col1,col2      keep columns
+  | where col=val         filter rows  (= != > < >= <= ~)
+  | grep text             search all columns
+  | sort col [asc|desc]   sort rows
+  | limit N               first N rows
+  | skip N                skip N rows
+  | count                 count rows
+  | unique [col]          deduplicate
+  | reverse               flip order
+  | fmt json|csv|tsv      reformat output
+  | add col=expr          add a computed column
+  | rename old=new        rename a column
 
 ` + c(ansiBold+ansiCyan, "  ── BOX STORAGE ────────────────────────────────────────────") + `
-  cmd #=           auto-store result
-  cmd #=key        store as named key
-  box              list all entries
-  box get <key>    retrieve entry
-  box rm <key>     remove entry
-  box rename o n   rename entry
-  box tag k tag    add tag
-  box search q     search
-  box export f     export JSON
-  box import f     import JSON
-  box clear        wipe all
+  cmd #=              auto-store result with generated key
+  cmd #=key           store result as named key
+  box                 list all entries → table
+  box get <key>       retrieve an entry
+  box rm <key>        delete an entry
+  box rename <o> <n>  rename a key
+  box tag <k> <tag>   add a tag
+  box untag <k> <tag> remove a tag
+  box search <query>  search entries
+  box export <file>   export all to JSON
+  box import <file>   import from JSON
+  box clear           wipe everything
+
+` + c(ansiBold+ansiCyan, "  ── FUN ─────────────────────────────────────────────────────") + `
+  figlet <text>       big ASCII-art text
+  matrix              matrix rain animation
+  lolcat <text>       rainbow coloured text
+  drawbox <text>      draw a box around text
+  notify <msg>        system desktop notification
 
 ` + c(ansiBold+ansiCyan, "  ── SESSION ─────────────────────────────────────────────────") + `
-  history [N]      last N commands (table)
-  source <file>    run script file
-  watch [-n s] cmd run command repeatedly
-  man <cmd>        manual page / description
-  clear            clear screen
-  help             this help
-  true / false     exit 0 / exit 1
-  exit / quit      leave StructSH
+  history [N]         last N commands → table
+  watch [-n s] <cmd>  run command repeatedly
+  clear               clear the screen
+  help                this help text
+  exit / quit         leave StructSH
 `
 	return NewText(help), true, nil
 }
