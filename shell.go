@@ -50,10 +50,10 @@ func NewShell() *Shell {
 		cwd = "/"
 	}
 	sh := &Shell{
-		cwd:     cwd,
-		box:     NewBox(),
-		aliases: make(map[string]Alias),
-		vars:    make(map[string]string),
+		cwd:          cwd,
+		box:          NewBox(),
+		aliases:      make(map[string]Alias),
+		vars:         make(map[string]string),
 		funcs:        make(map[string]*UserFunc),
 		readonlyVars: make(map[string]bool),
 		arrays:       make(map[string]*ShArray),
@@ -351,15 +351,15 @@ func historyPaths() (string, string) {
 	var tmpDir, permDir string
 
 	if runtime.GOOS == "windows" {
-		tmpDir = filepath.Join(os.Getenv("TEMP"), "structsh")
-		permDir = filepath.Join(os.Getenv("APPDATA"), "structsh")
+		tmpDir = filepath.Join(os.Getenv("TEMP"), "Katsh")
+		permDir = filepath.Join(os.Getenv("APPDATA"), "Katsh")
 	} else {
-		tmpDir = filepath.Join("/tmp", "structsh")
+		tmpDir = filepath.Join("/tmp", "Katsh")
 		home := os.Getenv("HOME")
 		if home == "" {
 			home = "/"
 		}
-		permDir = filepath.Join(home, ".config", "structsh")
+		permDir = filepath.Join(home, ".config", "Katsh")
 	}
 
 	_ = os.MkdirAll(tmpDir, 0755)

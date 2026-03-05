@@ -1,7 +1,7 @@
 package main
 
 // ─────────────────────────────────────────────
-//  StructSH — Structured Shell
+//  Katsh — Structured Shell
 //
 //  File layout (all package main):
 //    main.go       — entry point

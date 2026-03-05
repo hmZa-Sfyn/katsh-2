@@ -97,7 +97,7 @@ func localMax(a, b int) int {
 func banner() string {
 	return c(ansiGreen, `
   ╔══════════════════════════════════════════════════════╗
-  ║  StructSH  ·  Structured Shell  ·  v0.3.0           ║
+  ║  Katsh  ·  Structured Shell  ·  v0.3.0           ║
   ║  Everything is data. Every output is a table.       ║
   ╚══════════════════════════════════════════════════════╝`) +
 		"\n" + c(ansiGrey, "  Type 'help' to get started. Ctrl-D or 'exit' to quit.\n")

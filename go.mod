@@ -1,4 +1,4 @@
-module structsh
+module Katsh
 
 go 1.22
 

@@ -6,7 +6,7 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Lexer — tokenises StructSH source with exact line + column tracking.
+//  Lexer — tokenises Katsh source with exact line + column tracking.
 //
 //  Token types:
 //   WORD      bare word / identifier
@@ -24,7 +24,7 @@ import (
 type TokKind int
 
 const (
-	TokWord     TokKind = iota
+	TokWord TokKind = iota
 	TokNumber
 	TokString
 	TokBacktick
@@ -206,71 +206,88 @@ func (l *Lexer) scanOne() {
 	ch2 := l.peek2()
 	switch {
 	case ch == '=' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "==", line, col)
 		return
 	case ch == '!' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "!=", line, col)
 		return
 	case ch == '<' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "<=", line, col)
 		return
 	case ch == '>' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, ">=", line, col)
 		return
 	case ch == '+' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "+=", line, col)
 		return
 	case ch == '-' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "-=", line, col)
 		return
 	case ch == '*' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "*=", line, col)
 		return
 	case ch == '/' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "/=", line, col)
 		return
 	case ch == '%' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "%=", line, col)
 		return
 	case ch == '+' && ch2 == '+':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "++", line, col)
 		return
 	case ch == '-' && ch2 == '-':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "--", line, col)
 		return
 	case ch == '&' && ch2 == '&':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "&&", line, col)
 		return
 	case ch == '|' && ch2 == '|':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "||", line, col)
 		return
 	case ch == '-' && ch2 == '>':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "->", line, col)
 		return
 	case ch == '=' && ch2 == '>':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "=>", line, col)
 		return
 	case ch == '.' && ch2 == '.':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		l.emit(TokOp, "..", line, col)
 		return
 	case ch == '#' && ch2 == '=':
-		l.advance(); l.advance()
+		l.advance()
+		l.advance()
 		// consume optional key
 		var sb strings.Builder
 		sb.WriteString("#=")

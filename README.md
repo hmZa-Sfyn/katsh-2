@@ -1,15 +1,15 @@
-# StructSH
+# Katsh
 
 **A structured shell where every output is a table.**
 
 ```
   ╔══════════════════════════════════════════════════════╗
-  ║  StructSH  ·  Structured Shell  ·  v0.3.0           ║
+  ║  Katsh  ·  Structured Shell  ·  v0.3.0           ║
   ║  Everything is data. Every output is a table.       ║
   ╚══════════════════════════════════════════════════════╝
 ```
 
-StructSH is a terminal shell written in Go that turns every command output into a structured table you can filter, sort, and pipe — while also being a full scripting language with variables, loops, functions, pattern matching, and an import/export extension system.
+Katsh is a terminal shell written in Go that turns every command output into a structured table you can filter, sort, and pipe — while also being a full scripting language with variables, loops, functions, pattern matching, and an import/export extension system.
 
 ---
 
@@ -17,10 +17,10 @@ StructSH is a terminal shell written in Go that turns every command output into 
 
 ```bash
 git clone <repo>
-cd structsh
+cd Katsh
 go mod tidy
-go build -o structsh .
-./structsh
+go build -o Katsh .
+./Katsh
 ```
 
 **Requires:** Go 1.22+ and `golang.org/x/term` (fetched automatically by `go mod tidy`).
@@ -61,7 +61,7 @@ curl https://api.example.com/users | where active=true | select name,email | fmt
 
 Live **syntax highlighting** as you type: commands green (unknown = red underlined), keywords magenta, `$vars` teal, strings yellow, flags cyan.
 
-**History** is saved persistently to `~/.config/structsh/history.json` (up to 10,000 entries) and survives restarts.
+**History** is saved persistently to `~/.config/Katsh/history.json` (up to 10,000 entries) and survives restarts.
 
 ---
 
@@ -306,7 +306,7 @@ if -n $var: echo "var is set"
 import "utils.ksh"
 import "./lib/helpers.ksh"
 
-# Remote URL (cached for 24h in ~/.config/structsh/extensions/)
+# Remote URL (cached for 24h in ~/.config/Katsh/extensions/)
 import "https://example.com/mylib.ksh"
 
 # GitHub shorthand (fetches raw.githubusercontent.com)

@@ -181,7 +181,7 @@ func handleBuiltin2(sh *Shell, command string, args []string) (*Result, bool, er
 	case "declare", "typeset":
 		return builtinDeclare(sh, args)
 	case "getopts":
-		return NewText("getopts: use structured args parsing in StructSH funcs instead"), true, nil
+		return NewText("getopts: use structured args parsing in Katsh funcs instead"), true, nil
 
 	// ── Fun / misc ───────────────────────────────────────────────────────────
 	case "figlet", "toilet":
@@ -515,7 +515,7 @@ func builtinDirname(sh *Shell, args []string) (*Result, bool, error) {
 }
 
 func builtinMktemp(sh *Shell, args []string) (*Result, bool, error) {
-	pattern := "structsh-*"
+	pattern := "Katsh-*"
 	dir := ""
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -1101,7 +1101,7 @@ func extensionCacheDir() string {
 	if home == "" {
 		home = os.TempDir()
 	}
-	dir := filepath.Join(home, ".config", "structsh", "extensions")
+	dir := filepath.Join(home, ".config", "Katsh", "extensions")
 	_ = os.MkdirAll(dir, 0755)
 	return dir
 }
@@ -1331,7 +1331,7 @@ func builtinDeclare(sh *Shell, args []string) (*Result, bool, error) {
 func builtinFiglet(sh *Shell, args []string) (*Result, bool, error) {
 	text := strings.Join(args, " ")
 	if text == "" {
-		text = "StructSH"
+		text = "Katsh"
 	}
 	// Try system figlet/toilet first
 	for _, prog := range []string{"figlet", "toilet"} {
@@ -1403,7 +1403,7 @@ func builtinLolcat(sh *Shell, args []string) (*Result, bool, error) {
 	// Fallback: rainbow colors
 	text := strings.Join(args, " ")
 	if text == "" {
-		text = "StructSH is awesome!"
+		text = "Katsh is awesome!"
 	}
 	colors := []string{ansiRed, ansiYellow, ansiGreen, ansiCyan, ansiBlue, ansiMagenta}
 	var sb strings.Builder
@@ -1418,7 +1418,7 @@ func builtinLolcat(sh *Shell, args []string) (*Result, bool, error) {
 func builtinDrawbox(sh *Shell, args []string) (*Result, bool, error) {
 	text := strings.Join(args, " ")
 	if text == "" {
-		text = "Hello from StructSH"
+		text = "Hello from Katsh"
 	}
 	width := len(text) + 4
 	top := "╔" + strings.Repeat("═", width) + "╗"
@@ -1428,7 +1428,7 @@ func builtinDrawbox(sh *Shell, args []string) (*Result, bool, error) {
 }
 
 func builtinNotify(sh *Shell, args []string) (*Result, bool, error) {
-	title := "StructSH"
+	title := "Katsh"
 	msg := strings.Join(args, " ")
 	if msg == "" {
 		msg = "Done!"
