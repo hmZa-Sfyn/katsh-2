@@ -106,3 +106,8 @@ func formatInt(n int) string {
 	}
 	return s
 }
+
+// ShArray holds an ordered list of string values (shell array).
+type ShArray struct {
+	Items []string
+}
