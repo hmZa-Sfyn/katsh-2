@@ -303,14 +303,14 @@ if -n $var: echo "var is set"
 
 ```sh
 # Local file
-import "utils.ssh"
-import "./lib/helpers.ssh"
+import "utils.ksh"
+import "./lib/helpers.ksh"
 
 # Remote URL (cached for 24h in ~/.config/structsh/extensions/)
-import "https://example.com/mylib.ssh"
+import "https://example.com/mylib.ksh"
 
 # GitHub shorthand (fetches raw.githubusercontent.com)
-import "username/repo/path/to/script.ssh"
+import "username/repo/path/to/script.ksh"
 ```
 
 ### Exporting

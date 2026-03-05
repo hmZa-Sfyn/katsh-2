@@ -3372,7 +3372,7 @@ func builtinHelp() (*Result, bool, error) {
   env / printenv          show OS environment → table
 
 ` + c(ansiBold+ansiCyan, "  ── IMPORT / EXPORT (extensions) ───────────────────────────") + `
-  import "file.ssh"       source a local script file
+  import "file.ksh"       source a local script file
   import "https://..."    fetch + cache remote script (24 h TTL)
   import "user/repo/path" fetch from GitHub (raw)
   export func <name>      mark function as exported
