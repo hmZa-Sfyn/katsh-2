@@ -11,28 +11,30 @@ import (
 
 // ShellError is a structured error with context, hint, and fix suggestion.
 type ShellError struct {
-	Code     string // e.g. "E001"
-	Kind     string // e.g. "SyntaxError", "TypeError", "CommandNotFound"
-	Message  string // short message
-	Detail   string // longer explanation
-	Source   string // the line of source that caused it
-	Col      int    // column offset (0-based, -1 = unknown)
-	Line     int    // line number (1-based, 0 = unknown)
-	Hint     string // what to check
-	Fix      string // suggested fix / example
-	Trace    []TraceFrame
+	Code    string // e.g. "E001"
+	Kind    string // e.g. "SyntaxError", "TypeError", "CommandNotFound"
+	Message string // short message
+	Detail  string // longer explanation
+	Source  string // the line of source that caused it
+	Col     int    // column offset (0-based, -1 = unknown)
+	Line    int    // line number (1-based, 0 = unknown)
+	Hint    string // what to check
+	Fix     string // suggested fix / example
+	Trace   []TraceFrame
 }
 
 type TraceFrame struct {
-	At   string // e.g. "line 3 in func bogo_sort"
-	Src  string // source snippet
+	At  string // e.g. "line 3 in func bogo_sort"
+	Src string // source snippet
 }
 
 func (e *ShellError) Error() string { return e.Message }
 
 // PrintError renders a rich, coloured error block to stdout.
 func PrintError(err *ShellError) {
-	if err == nil { return }
+	if err == nil {
+		return
+	}
 
 	// ── Header ──────────────────────────────────────────────────────────────
 	fmt.Printf("\n  %s%s[%s] %s%s\n",
@@ -46,8 +48,8 @@ func PrintError(err *ShellError) {
 		}
 		fmt.Printf("  %s│%s %s%s%s%s\n", ansiGrey, ansiReset, ansiWhite, err.Source, ansiReset, loc)
 		if err.Col >= 0 {
-			pad := strings.Repeat(" ", err.Col+4)
-			fmt.Printf("  %s│%s %s%s^── here%s\n", ansiGrey, ansiReset, pad, ansiRed, ansiReset)
+			pad := strings.Repeat(" ", err.Col+1)
+			fmt.Printf("  %s│%s%s%s^── here%s\n", ansiGrey, ansiReset, pad, ansiRed, ansiReset)
 		}
 	}
 
@@ -179,7 +181,9 @@ func errSimple(msg string) *ShellError {
 
 // wrapErr wraps a plain Go error as a ShellError for nice display.
 func wrapErr(err error, src string) *ShellError {
-	if err == nil { return nil }
+	if err == nil {
+		return nil
+	}
 	msg := err.Error()
 	// Detect common patterns
 	if strings.Contains(msg, "no such file") {
@@ -242,7 +246,9 @@ func editDistance(a, b string) int {
 		dp[i] = make([]int, lb+1)
 		dp[i][0] = i
 	}
-	for j := 0; j <= lb; j++ { dp[0][j] = j }
+	for j := 0; j <= lb; j++ {
+		dp[0][j] = j
+	}
 	for i := 1; i <= la; i++ {
 		for j := 1; j <= lb; j++ {
 			if a[i-1] == b[j-1] {
@@ -256,8 +262,15 @@ func editDistance(a, b string) int {
 }
 
 func min3(a, b, c int) int {
-	if a < b { if a < c { return a }; return c }
-	if b < c { return b }
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
 	return c
 }
 
@@ -277,7 +290,10 @@ func extractPath(msg string) string {
 func errSyntaxAt(msg, src, excerpt string, line, col int) *ShellError {
 	if line == 0 {
 		lx := Lex(src)
-		if len(lx.Tokens) > 0 { line = lx.Tokens[0].Line; col = lx.Tokens[0].Col }
+		if len(lx.Tokens) > 0 {
+			line = lx.Tokens[0].Line
+			col = lx.Tokens[0].Col
+		}
 	}
 	return &ShellError{
 		Code:    "E002",
@@ -293,22 +309,28 @@ func errSyntaxAt(msg, src, excerpt string, line, col int) *ShellError {
 func errTypeAt(msg, src string, line, col int) *ShellError {
 	if line == 0 {
 		lx := Lex(src)
-		if len(lx.Tokens) > 0 { line = lx.Tokens[0].Line }
+		if len(lx.Tokens) > 0 {
+			line = lx.Tokens[0].Line
+		}
 	}
-	return &ShellError{Code:"E003", Kind:"TypeError", Message:msg, Source:src, Line:line, Col:col}
+	return &ShellError{Code: "E003", Kind: "TypeError", Message: msg, Source: src, Line: line, Col: col}
 }
 
 func errDivZeroAt(src string, col int) *ShellError {
 	lx := Lex(src)
 	line := 1
 	for _, tok := range lx.Tokens {
-		if tok.Text == "/" { line = tok.Line; col = tok.Col; break }
+		if tok.Text == "/" {
+			line = tok.Line
+			col = tok.Col
+			break
+		}
 	}
 	return &ShellError{
-		Code:"E006", Kind:"DivisionByZero", Message:"division by zero",
-		Source:src, Line:line, Col:col,
-		Hint:"Check the denominator before dividing",
-		Fix:"if denom != 0: result = num / denom",
+		Code: "E006", Kind: "DivisionByZero", Message: "division by zero",
+		Source: src, Line: line, Col: col,
+		Hint: "Check the denominator before dividing",
+		Fix:  "if denom != 0: result = num / denom",
 	}
 }
 
@@ -316,12 +338,16 @@ func errReadonly(name, src string) *ShellError {
 	lx := Lex(src)
 	line, col := 1, 0
 	for _, tok := range lx.Tokens {
-		if tok.Text == name { line = tok.Line; col = tok.Col; break }
+		if tok.Text == name {
+			line = tok.Line
+			col = tok.Col
+			break
+		}
 	}
 	return &ShellError{
-		Code:"E008", Kind:"ReadonlyError",
-		Message:fmt.Sprintf("cannot assign to readonly variable %q", name),
-		Source:src, Line:line, Col:col,
-		Hint:"Remove the 'readonly' declaration or use a different name",
+		Code: "E008", Kind: "ReadonlyError",
+		Message: fmt.Sprintf("cannot assign to readonly variable %q", name),
+		Source:  src, Line: line, Col: col,
+		Hint: "Remove the 'readonly' declaration or use a different name",
 	}
 }
