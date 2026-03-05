@@ -51,27 +51,27 @@ func dim(text string) string {
 
 // errMsg formats an error line.
 func errMsg(msg string) string {
-	return fmt.Sprintf("  %s✖ %s%s", ansiRed, msg, ansiReset)
+	return fmt.Sprintf("  %s %s%s", ansiRed, msg, ansiReset)
 }
 
 // okMsg formats a success line.
 func okMsg(msg string) string {
-	return fmt.Sprintf("  %s✔ %s%s", ansiGreen, msg, ansiReset)
+	return fmt.Sprintf("  %s %s%s", ansiGreen, msg, ansiReset)
 }
 
 // infoMsg formats an info line.
 func infoMsg(msg string) string {
-	return fmt.Sprintf("  %s· %s%s", ansiCyan, msg, ansiReset)
+	return fmt.Sprintf("  %s %s%s", ansiCyan, msg, ansiReset)
 }
 
 // warnMsg formats a warning line.
 func warnMsg(msg string) string {
-	return fmt.Sprintf("  %s⚠ %s%s", ansiYellow, msg, ansiReset)
+	return fmt.Sprintf("  %s %s%s", ansiYellow, msg, ansiReset)
 }
 
 // boxMsg formats a box-store notification.
 func boxMsg(key string, id int, size string) string {
-	return fmt.Sprintf("  %s📦 box[%s\"%s\"%s] id:%s%d%s  %s%s%s",
+	return fmt.Sprintf("  %s box[%s\"%s\"%s] id:%s%d%s  %s%s%s",
 		ansiYellow,
 		ansiBold, key, ansiReset+ansiYellow,
 		ansiBold, id, ansiReset+ansiYellow,
@@ -97,8 +97,8 @@ func localMax(a, b int) int {
 func banner() string {
 	return c(ansiGreen, `
   ╔══════════════════════════════════════════════════════╗
-  ║  Katsh  ·  Structured Shell  ·  v0.3.0           ║
-  ║  Everything is data. Every output is a table.       ║
+  ║  Katsh  ·  Structured Shell  ·  v0.3.0               ║
+  ║  Everything is data. Every output is a table.        ║
   ╚══════════════════════════════════════════════════════╝`) +
 		"\n" + c(ansiGrey, "  Type 'help' to get started. Ctrl-D or 'exit' to quit.\n")
 }
