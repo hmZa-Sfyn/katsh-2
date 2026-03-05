@@ -343,7 +343,7 @@ export
 ### Text Processing
 `grep`  `sed`  `awk`  `cut`  `tr`  `sort`  `uniq`  `tee`  `split`  `xargs`
 `nl`  `fold`  `expand`  `unexpand`  `column`  `paste`  `comm`  `shuf`
-`rev`  `strings`  `xxd`  `numfmt`
+`reverse`  `strings`  `xxd`  `numfmt`
 
 ### Processes & System
 `ps`  `kill`  `sleep`  `jobs`  `nice`  `timeout`  `pgrep`  `pkill`  `nohup`
