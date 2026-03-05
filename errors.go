@@ -69,7 +69,7 @@ func PrintError(err *ShellError) {
 
 	// ── Hint ─────────────────────────────────────────────────────────────────
 	if err.Hint != "" {
-		fmt.Printf("  %s╰─ 💡 hint:%s %s\n", ansiYellow, ansiReset, err.Hint)
+		fmt.Printf("  %s╰─ %shint:%s %s\n", ansiGrey, ansiYellow, ansiReset, err.Hint)
 	}
 
 	// ── Fix ──────────────────────────────────────────────────────────────────
