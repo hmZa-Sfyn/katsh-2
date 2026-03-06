@@ -218,8 +218,12 @@ func (sh *Shell) evalRHS(rhs, src string) string {
 	return sh.evalExpr(rhs)
 }
 
-// interpolate expands $VAR, ${VAR}, ${VAR:-default}, ${#VAR}, and backticks.
+// interpolate expands $VAR, ${VAR}, ${VAR:-default}, ${#VAR}, backticks, and $().
 func (sh *Shell) interpolate(s string) string {
+	// Expand $(...) first — must happen before os.Expand to avoid confusion with $VAR
+	if strings.Contains(s, "$(") {
+		s = sh.expandDollarParens(s)
+	}
 	s = sh.expandBackticks(s)
 	return os.Expand(s, func(key string) string {
 		if strings.HasPrefix(key,"#") { return strconv.Itoa(len(sh.getVar(key[1:]))) }

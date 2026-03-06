@@ -261,6 +261,33 @@ func handleBuiltin(sh *Shell, command string, args []string) (*Result, bool, err
 		return nil, true, errExit
 	case "source", ".":
 		return builtinSource(sh, args)
+
+	// ── Shell passthrough builtins ────────────────────────────────────────
+	// `run` and `shell` assemble all args as a command string and pass to
+	// the user's shell ($SHELL / bash) with real stdin/stdout/stderr.
+	case "run", "shell":
+		if len(args) == 0 {
+			// No args → launch interactive shell session
+			code := RunPassthrough("", "", sh.cwd)
+			if code != 0 { return nil, true, fmt.Errorf("shell exited %d", code) }
+			return NewText(""), true, nil
+		}
+		cmdStr := sh.shellExpand(strings.Join(args, " "))
+		cmdStr = stripOuterQuotes(cmdStr)
+		code := RunPassthrough("", cmdStr, sh.cwd)
+		if code != 0 { return nil, true, fmt.Errorf("shell exited %d", code) }
+		return NewText(""), true, nil
+
+	// `capture varname cmd args...` — run cmd in shell, store stdout in var
+	case "capture":
+		if len(args) < 2 {
+			return nil, true, fmt.Errorf("capture: usage: capture <varname> <command...>")
+		}
+		varName := args[0]
+		cmdStr := sh.shellExpand(strings.Join(args[1:], " "))
+		out, _ := RunCaptureShell("", cmdStr, sh.cwd)
+		sh.setVar(varName, out)
+		return NewText(out), true, nil
 	case "watch":
 		return builtinWatch(sh, args)
 
@@ -3284,6 +3311,38 @@ func builtinHelp() (*Result, bool, error) {
   import "user/repo/path" fetch from GitHub (raw)
   export func <name>      mark function as exported
   export <VAR>=<val>      set + export environment variable
+
+` + c(ansiBold+ansiCyan, "  ── SHELL PASSTHROUGH ───────────────────────────────────────") + `
+  Run any bash/zsh/sh command with full TTY — pipes, redirects, colour,
+  interactive prompts, pagers — everything works.
+
+  ` + c(ansiBold, "Passthrough (output goes straight to terminal):") + `
+    bash! git log --oneline | head -20
+    zsh!  autoload -U compinit && compinit
+    sh!   for f in *.txt; do wc -l $f; done
+    run   git log --oneline | grep feat    uses $SHELL or bash
+    !     any command here                 bare ! shorthand
+
+    bash                  drop into an interactive bash session
+    zsh                   drop into an interactive zsh session
+    bash -c "cmd"         native syntax, also works
+
+  ` + c(ansiBold, "Capture output into a variable:") + `
+    x = $(git rev-parse HEAD)        POSIX $() — works in any expression
+    x = \`git branch --show-current\`  backtick — same thing
+    capture x git log --oneline | head -5
+    msg = "on branch $(git branch --show-current)"
+
+  ` + c(ansiBold, "Auto-passthrough (no prefix needed):") + `
+    vim  nvim  nano  emacs  less  man  htop  top  btop
+    ssh  telnet  mysql  psql  sqlite3  mongo
+    python  node  ruby  irb  julia  lua
+    tmux  screen  zellij  ranger  fzf  tig  lazygit ...
+
+  ` + c(ansiBold, "Run a script file:") + `
+    bash ./deploy.sh arg1 arg2
+    zsh  ~/.config/init.zsh
+    katsh script.ksh -e           see:  katsh --help
 
 ` + c(ansiBold+ansiCyan, "  ── SCRIPTING HELPERS ───────────────────────────────────────") + `
   eval <expr>             evaluate a string as a command

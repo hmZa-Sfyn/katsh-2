@@ -110,6 +110,19 @@ func (sh *Shell) execLine(raw string) int {
 	// ── Expand backticks in the raw line before anything else ─────────────
 	raw = sh.expandBackticks(raw)
 
+	// ── $(...) POSIX command substitution → expand inline ─────────────────
+	if strings.Contains(raw, "$(") {
+		raw = sh.expandDollarParens(raw)
+	}
+
+	// ── Passthrough prefixes ───────────────────────────────────────────────
+	// bash!  zsh!  sh!  fish!  — run the rest of the line as a shell command
+	// !      — use $SHELL / bash
+	// shell  — alias for bash!
+	if code, handled := sh.tryPassthrough(raw); handled {
+		return code
+	}
+
 	// ── Try scripting engine first (if/for/while/func/variables) ──────────
 	if handled, code := sh.evalScript(raw); handled {
 		return code
@@ -131,12 +144,10 @@ func (sh *Shell) execLine(raw string) int {
 	if command == "__literal__" && len(args) > 0 {
 		raw := args[0]
 		var result *Result
-		// Quoted string → strip quotes, kind=string
 		if (strings.HasPrefix(raw, `"`) && strings.HasSuffix(raw, `"`)) ||
 			(strings.HasPrefix(raw, `'`) && strings.HasSuffix(raw, `'`)) {
 			result = NewTyped(raw[1:len(raw)-1], "string")
 		} else {
-			// Numeric literal → kind=number
 			result = NewTyped(raw, "number")
 		}
 		if len(pc.Pipes) == 0 {
@@ -190,13 +201,19 @@ func (sh *Shell) execLine(raw string) int {
 		return 0
 	}
 
+	// ── Interactive commands — auto passthrough ────────────────────────────
+	// vim, htop, ssh, less, etc. need a real TTY; skip capture mode.
+	if needsPassthrough(command) {
+		return RunPassthroughArgs(command, args, sh.cwd)
+	}
+
 	// ── Unknown command — check for typo ──────────────────────────────────
 	if findInPath(command) == "" {
 		sh.printErr(errUnknownCmd(command, raw))
 		return 127
 	}
 
-	// ── External command ──────────────────────────────────────────────────
+	// ── External command (capture mode) ───────────────────────────────────
 	result, err = RunExternal(command, args, sh.cwd)
 	if err != nil {
 		sh.printErr(wrapErr(err, raw))
@@ -402,6 +419,125 @@ func (sh *Shell) expandVars(raw string) string {
 		return os.Getenv(key)
 	})
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Shell passthrough — run commands in bash/zsh/sh with a real TTY
+// ─────────────────────────────────────────────────────────────────────────────
+
+// tryPassthrough checks for passthrough syntax and runs it immediately.
+// Returns (exitCode, true) if matched; (0, false) if not a passthrough command.
+//
+// Syntax summary:
+//   bash! git log | grep fix          explicit bash — rest of line is the cmd
+//   zsh!  print -P "%F{red}hi%f"      explicit zsh
+//   sh!   for f in *.go; do wc $f; done
+//   run   git log | grep fix          uses $SHELL or bash
+//   !     git log | grep fix          bare ! prefix (same as run)
+//   bash                              bare name → interactive session
+//   zsh                               bare name → interactive session
+func (sh *Shell) tryPassthrough(raw string) (int, bool) {
+	trimmed := strings.TrimSpace(raw)
+
+	// run / shell prefix
+	for _, prefix := range []string{"run ", "run! ", "shell ", "shell! "} {
+		if strings.HasPrefix(trimmed, prefix) {
+			cmdStr := sh.shellExpand(strings.TrimSpace(trimmed[len(prefix):]))
+			return RunPassthrough("", cmdStr, sh.cwd), true
+		}
+	}
+
+	// ! prefix  (but not !=  !~  used as operators)
+	if len(trimmed) > 1 && trimmed[0] == '!' && trimmed[1] != '=' && trimmed[1] != '~' {
+		cmdStr := sh.shellExpand(strings.TrimSpace(trimmed[1:]))
+		return RunPassthrough("", cmdStr, sh.cwd), true
+	}
+
+	// bash! cmd  /  zsh! cmd  /  sh! cmd
+	for _, shell := range []string{"bash", "zsh", "sh", "fish", "ksh", "dash", "tcsh"} {
+		bangPrefix := shell + "! "
+		if strings.HasPrefix(trimmed, bangPrefix) {
+			cmdStr := sh.shellExpand(strings.TrimSpace(trimmed[len(bangPrefix):]))
+			return RunPassthrough(shell, cmdStr, sh.cwd), true
+		}
+		// bare  bash!  → interactive session
+		if trimmed == shell+"!" {
+			return RunPassthrough(shell, "", sh.cwd), true
+		}
+	}
+
+	// bare shell name → interactive session  (e.g. user types just "bash")
+	for _, shell := range []string{"bash", "zsh", "fish", "ksh", "tcsh"} {
+		if trimmed == shell {
+			return RunPassthrough(shell, "", sh.cwd), true
+		}
+	}
+
+	// bash -c "..."  /  zsh -c "..."  — native syntax, routed to passthrough
+	for _, shell := range []string{"bash", "zsh", "sh", "fish"} {
+		dashC := shell + " -c "
+		if strings.HasPrefix(trimmed, dashC) {
+			cmdStr := stripOuterQuotes(sh.shellExpand(strings.TrimSpace(trimmed[len(dashC):])))
+			return RunPassthrough(shell, cmdStr, sh.cwd), true
+		}
+		// bash ./script.sh  /  zsh script.zsh
+		shellSpace := shell + " "
+		if strings.HasPrefix(trimmed, shellSpace) {
+			rest := strings.TrimSpace(trimmed[len(shellSpace):])
+			for _, ext := range []string{".sh", ".bash", ".zsh", ".ksh"} {
+				if strings.Contains(rest, ext) {
+					return RunPassthrough(shell, trimmed, sh.cwd), true
+				}
+			}
+		}
+	}
+
+	return 0, false
+}
+
+// shellExpand expands $VAR and $() in a string before passing to the OS shell.
+func (sh *Shell) shellExpand(s string) string {
+	s = sh.expandVars(s)
+	s = sh.expandDollarParens(s)
+	return s
+}
+
+// expandDollarParens replaces $(...) with captured shell output.
+// Supports nesting:  x = $(echo $(whoami))
+func (sh *Shell) expandDollarParens(s string) string {
+	for {
+		start := strings.Index(s, "$(")
+		if start < 0 { break }
+		depth, end := 0, -1
+		for i := start + 2; i < len(s); i++ {
+			switch s[i] {
+			case '(': depth++
+			case ')':
+				if depth == 0 { end = i } else { depth-- }
+			}
+			if end >= 0 { break }
+		}
+		if end < 0 { break }
+		inner := s[start+2 : end]
+		inner = sh.expandDollarParens(inner)
+		inner = sh.expandVars(inner)
+		out, _ := RunCaptureShell("", inner, sh.cwd)
+		s = s[:start] + out + s[end+1:]
+	}
+	return s
+}
+
+// stripOuterQuotes removes one layer of surrounding quotes.
+func stripOuterQuotes(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') ||
+			(s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
+}
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  History persistence

@@ -55,7 +55,7 @@ func main() {
 			printUsage()
 			os.Exit(0)
 		case "--version":
-			fmt.Println("KatSH v0.4.0 (StructSH engine)")
+			fmt.Println("KatSH v0.4.0 (Katsh engine)")
 			os.Exit(0)
 		default:
 			remaining = append(remaining, a)

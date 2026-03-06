@@ -23,29 +23,31 @@ import (
 
 // ShellError is a structured error with context, hint, and fix suggestion.
 type ShellError struct {
-	Code     string // e.g. "E001"
-	Kind     string // e.g. "SyntaxError", "TypeError", "CommandNotFound"
-	Message  string // short message
-	Detail   string // longer explanation
-	Source   string // the FULL input line that caused the error
-	Col      int    // column offset of error start (0-based, -1 = unknown)
-	Span     int    // length of the error token in runes (0 = use ^, >0 = use ~~~)
-	Line     int    // line number (1-based, 0 = unknown)
-	Hint     string // what to check
-	Fix      string // suggested fix / example
-	Trace    []TraceFrame
+	Code    string // e.g. "E001"
+	Kind    string // e.g. "SyntaxError", "TypeError", "CommandNotFound"
+	Message string // short message
+	Detail  string // longer explanation
+	Source  string // the FULL input line that caused the error
+	Col     int    // column offset of error start (0-based, -1 = unknown)
+	Span    int    // length of the error token in runes (0 = use ^, >0 = use ~~~)
+	Line    int    // line number (1-based, 0 = unknown)
+	Hint    string // what to check
+	Fix     string // suggested fix / example
+	Trace   []TraceFrame
 }
 
 type TraceFrame struct {
 	At  string // e.g. "line 3 in func bogo_sort"
-	Src string  // source snippet
+	Src string // source snippet
 }
 
 func (e *ShellError) Error() string { return e.Message }
 
 // PrintError renders a rich, coloured error block to stderr.
 func PrintError(err *ShellError) {
-	if err == nil { return }
+	if err == nil {
+		return
+	}
 
 	// ── Header ──────────────────────────────────────────────────────────────
 	fmt.Printf("\n  %s%s[%s]%s %s%s%s\n",
@@ -69,14 +71,16 @@ func PrintError(err *ShellError) {
 		if err.Col >= 0 {
 			// Count visual columns (rune-aware) up to Col
 			pre := runePrefix(err.Source, err.Col)
-			pad := strings.Repeat(" ", pre+3) // +3 for "│  " prefix
+			pad := strings.Repeat(" ", pre) // +3 for "│  " prefix
 
 			spanLen := err.Span
 			if spanLen <= 0 {
 				// No span given: auto-detect token length at Col
 				spanLen = tokenLenAt(err.Source, err.Col)
 			}
-			if spanLen <= 0 { spanLen = 1 }
+			if spanLen <= 0 {
+				spanLen = 1
+			}
 
 			underline := strings.Repeat("~", spanLen)
 			fmt.Printf("  %s│%s  %s%s%s%s\n",
@@ -138,13 +142,17 @@ func buildHighlightedLine(src string, col, span int) string {
 	if span <= 0 {
 		span = tokenLenAt(src, col)
 	}
-	if span <= 0 { span = 1 }
+	if span <= 0 {
+		span = 1
+	}
 	end := col + span
-	if end > len(runes) { end = len(runes) }
+	if end > len(runes) {
+		end = len(runes)
+	}
 
 	before := string(runes[:col])
-	bad    := string(runes[col:end])
-	after  := string(runes[end:])
+	bad := string(runes[col:end])
+	after := string(runes[end:])
 
 	return ansiWhite + before +
 		ansiBold + ansiRed + bad + ansiReset +
@@ -154,19 +162,27 @@ func buildHighlightedLine(src string, col, span int) string {
 // runePrefix returns the number of runes before byte index col in s.
 // (We store Col as byte offset from the lexer, but display in rune columns.)
 func runePrefix(s string, byteCol int) int {
-	if byteCol <= 0 { return 0 }
-	if byteCol > len(s) { byteCol = len(s) }
+	if byteCol <= 0 {
+		return 0
+	}
+	if byteCol > len(s) {
+		byteCol = len(s)
+	}
 	return utf8.RuneCountInString(s[:byteCol])
 }
 
 // tokenLenAt returns the length (in runes) of the identifier/word
 // starting at byte offset col in s.
 func tokenLenAt(s string, col int) int {
-	if col < 0 || col >= len(s) { return 1 }
+	if col < 0 || col >= len(s) {
+		return 1
+	}
 	runes := []rune(s)
 	// Find rune index from byte col
 	runeIdx := utf8.RuneCountInString(s[:col])
-	if runeIdx >= len(runes) { return 1 }
+	if runeIdx >= len(runes) {
+		return 1
+	}
 	// Scan forward while it looks like the same token
 	start := runeIdx
 	ch := runes[start]
@@ -175,15 +191,21 @@ func tokenLenAt(s string, col int) int {
 	for i < len(runes) {
 		c := runes[i]
 		if isOp {
-			if !strings.ContainsRune("=<>!+-*/%&|^~", c) { break }
+			if !strings.ContainsRune("=<>!+-*/%&|^~", c) {
+				break
+			}
 		} else {
 			if c == ' ' || c == '\t' || c == '(' || c == ')' ||
-				c == '{' || c == '}' || c == ';' || c == ':' { break }
+				c == '{' || c == '}' || c == ';' || c == ':' {
+				break
+			}
 		}
 		i++
 	}
 	n := i - start
-	if n < 1 { n = 1 }
+	if n < 1 {
+		n = 1
+	}
 	return n
 }
 
@@ -245,7 +267,9 @@ func errRuntime(msg, src string, trace []TraceFrame) *ShellError {
 
 func errUndefined(varName, src string) *ShellError {
 	col := strings.Index(src, varName)
-	if col < 0 { col = strings.Index(src, "$"+varName) }
+	if col < 0 {
+		col = strings.Index(src, "$"+varName)
+	}
 	return &ShellError{
 		Code:    "E005",
 		Kind:    "UndefinedVariable",
@@ -296,7 +320,9 @@ func errSimple(msg string) *ShellError {
 
 // wrapErr wraps a plain Go error as a ShellError for nice display.
 func wrapErr(err error, src string) *ShellError {
-	if err == nil { return nil }
+	if err == nil {
+		return nil
+	}
 	msg := err.Error()
 	if strings.Contains(msg, "no such file") {
 		return &ShellError{
@@ -370,7 +396,9 @@ func editDistance(a, b string) int {
 		dp[i] = make([]int, lb+1)
 		dp[i][0] = i
 	}
-	for j := 0; j <= lb; j++ { dp[0][j] = j }
+	for j := 0; j <= lb; j++ {
+		dp[0][j] = j
+	}
 	for i := 1; i <= la; i++ {
 		for j := 1; j <= lb; j++ {
 			if a[i-1] == b[j-1] {
@@ -384,8 +412,15 @@ func editDistance(a, b string) int {
 }
 
 func min3(a, b, c int) int {
-	if a < b { if a < c { return a }; return c }
-	if b < c { return b }
+	if a < b {
+		if a < c {
+			return a
+		}
+		return c
+	}
+	if b < c {
+		return b
+	}
 	return c
 }
 
@@ -404,7 +439,10 @@ func extractPath(msg string) string {
 func errSyntaxAt(msg, src, excerpt string, line, col int) *ShellError {
 	if line == 0 {
 		lx := Lex(src)
-		if len(lx.Tokens) > 0 { line = lx.Tokens[0].Line; col = lx.Tokens[0].Col }
+		if len(lx.Tokens) > 0 {
+			line = lx.Tokens[0].Line
+			col = lx.Tokens[0].Col
+		}
 	}
 	return &ShellError{
 		Code:    "E002",
@@ -420,22 +458,28 @@ func errSyntaxAt(msg, src, excerpt string, line, col int) *ShellError {
 func errTypeAt(msg, src string, line, col int) *ShellError {
 	if line == 0 {
 		lx := Lex(src)
-		if len(lx.Tokens) > 0 { line = lx.Tokens[0].Line }
+		if len(lx.Tokens) > 0 {
+			line = lx.Tokens[0].Line
+		}
 	}
-	return &ShellError{Code:"E003", Kind:"TypeError", Message:msg, Source:src, Line:line, Col:col}
+	return &ShellError{Code: "E003", Kind: "TypeError", Message: msg, Source: src, Line: line, Col: col}
 }
 
 func errDivZeroAt(src string, col int) *ShellError {
 	lx := Lex(src)
 	line := 1
 	for _, tok := range lx.Tokens {
-		if tok.Text == "/" { line = tok.Line; col = tok.Col; break }
+		if tok.Text == "/" {
+			line = tok.Line
+			col = tok.Col
+			break
+		}
 	}
 	return &ShellError{
-		Code:"E006", Kind:"DivisionByZero", Message:"division by zero",
-		Source:src, Line:line, Col:col, Span:1,
-		Hint:"Check the denominator before dividing",
-		Fix:"if denom != 0: result = num / denom",
+		Code: "E006", Kind: "DivisionByZero", Message: "division by zero",
+		Source: src, Line: line, Col: col, Span: 1,
+		Hint: "Check the denominator before dividing",
+		Fix:  "if denom != 0: result = num / denom",
 	}
 }
 
@@ -443,13 +487,16 @@ func errReadonly(name, src string) *ShellError {
 	lx := Lex(src)
 	line, col := 1, 0
 	for _, tok := range lx.Tokens {
-		if tok.Text == name { line = tok.Line; col = tok.Col; break }
+		if tok.Text == name {
+			line = tok.Line
+			col = tok.Col
+			break
+		}
 	}
 	return &ShellError{
-		Code:"E008", Kind:"ReadonlyError",
-		Message:fmt.Sprintf("cannot assign to readonly variable %q", name),
-		Source:src, Line:line, Col:col, Span:len(name),
-		Hint:"Remove the 'readonly' declaration or use a different name",
+		Code: "E008", Kind: "ReadonlyError",
+		Message: fmt.Sprintf("cannot assign to readonly variable %q", name),
+		Source:  src, Line: line, Col: col, Span: len(name),
+		Hint: "Remove the 'readonly' declaration or use a different name",
 	}
 }
-
