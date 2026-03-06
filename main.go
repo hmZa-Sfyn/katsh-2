@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"strings"
+	"time"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -18,6 +22,31 @@ import (
 //    katsh -c  "cmd; cmd"         inline commands
 //    katsh script.ksh arg1 arg2   pass positional args ($1 $2 ...)
 // ─────────────────────────────────────────────────────────────────────────────
+
+/// rawexec is here
+
+func rawExec(command string, args []string, cwd string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, command, args...)
+
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
+
+	output, err := cmd.CombinedOutput()
+
+	outStr := strings.TrimRight(string(output), "\n\r")
+
+	if ctx.Err() != nil {
+		return outStr, ctx.Err() // e.g. context deadline exceeded
+	}
+
+	return outStr, err
+}
+
+///
 
 func main() {
 	args := os.Args[1:]
