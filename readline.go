@@ -41,10 +41,10 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 
 	fmt.Print(prompt)
 
-	var buf     []rune
-	cursor      := 0
-	histIdx     := -1
-	savedLine   := ""
+	var buf []rune
+	cursor := 0
+	histIdx := -1
+	savedLine := ""
 
 	// Redraw current line with syntax highlighting
 	redraw := func() {
@@ -70,7 +70,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 			if n >= 3 && b[1] == '[' {
 				switch b[2] {
 				case 'A': // ↑ up — history prev
-					if len(sh.history) == 0 { continue }
+					if len(sh.history) == 0 {
+						continue
+					}
 					if histIdx == -1 {
 						savedLine = string(buf)
 						histIdx = len(sh.history) - 1
@@ -82,7 +84,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					redraw()
 
 				case 'B': // ↓ down — history next
-					if histIdx == -1 { continue }
+					if histIdx == -1 {
+						continue
+					}
 					if histIdx < len(sh.history)-1 {
 						histIdx++
 						buf = []rune(sh.history[histIdx].Raw)
@@ -94,16 +98,24 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					redraw()
 
 				case 'C': // → right
-					if cursor < len(buf) { cursor++; redraw() }
+					if cursor < len(buf) {
+						cursor++
+						redraw()
+					}
 
 				case 'D': // ← left
-					if cursor > 0 { cursor--; redraw() }
+					if cursor > 0 {
+						cursor--
+						redraw()
+					}
 
 				case 'H': // Home
-					cursor = 0; redraw()
+					cursor = 0
+					redraw()
 
 				case 'F': // End
-					cursor = len(buf); redraw()
+					cursor = len(buf)
+					redraw()
 
 				case '3': // Delete key (ESC [ 3 ~)
 					if n >= 4 && b[3] == '~' && cursor < len(buf) {
@@ -112,9 +124,15 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					}
 
 				case '1': // ESC [ 1 ~ = Home
-					if n >= 4 && b[3] == '~' { cursor = 0; redraw() }
+					if n >= 4 && b[3] == '~' {
+						cursor = 0
+						redraw()
+					}
 				case '4': // ESC [ 4 ~ = End
-					if n >= 4 && b[3] == '~' { cursor = len(buf); redraw() }
+					if n >= 4 && b[3] == '~' {
+						cursor = len(buf)
+						redraw()
+					}
 				}
 			}
 			continue
@@ -134,21 +152,30 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 			}
 
 		case 0x01: // Ctrl-A — home
-			cursor = 0; redraw()
+			cursor = 0
+			redraw()
 
 		case 0x05: // Ctrl-E — end
-			cursor = len(buf); redraw()
+			cursor = len(buf)
+			redraw()
 
 		case 0x0b: // Ctrl-K — kill to end
-			buf = buf[:cursor]; redraw()
+			buf = buf[:cursor]
+			redraw()
 
 		case 0x15: // Ctrl-U — kill whole line
-			buf = buf[:0]; cursor = 0; redraw()
+			buf = buf[:0]
+			cursor = 0
+			redraw()
 
 		case 0x17: // Ctrl-W — delete prev word
 			end := cursor
-			for cursor > 0 && buf[cursor-1] == ' ' { cursor-- }
-			for cursor > 0 && buf[cursor-1] != ' ' { cursor-- }
+			for cursor > 0 && buf[cursor-1] == ' ' {
+				cursor--
+			}
+			for cursor > 0 && buf[cursor-1] != ' ' {
+				cursor--
+			}
 			buf = append(buf[:cursor], buf[end:]...)
 			redraw()
 
@@ -167,7 +194,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 
 		case 0x03: // Ctrl-C — cancel line
 			fmt.Print("^C\r\n")
-			buf = buf[:0]; cursor = 0; histIdx = -1
+			buf = buf[:0]
+			cursor = 0
+			histIdx = -1
 			fmt.Print(prompt)
 
 		case 0x09: // Tab — completion
@@ -191,7 +220,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 				fmt.Print("\r\n")
 				for i, o := range opts {
 					fmt.Printf("  %s%s%s", ansiCyan, o, ansiReset)
-					if i < len(opts)-1 { fmt.Print("  ") }
+					if i < len(opts)-1 {
+						fmt.Print("  ")
+					}
 				}
 				fmt.Print("\r\n")
 				fmt.Print(prompt)
@@ -321,10 +352,14 @@ func spanize(s string) []span {
 	prevWasPipe := false
 
 	flush := func(isSpace bool) {
-		if cur.Len() == 0 { return }
+		if cur.Len() == 0 {
+			return
+		}
 		t := cur.String()
 		spans = append(spans, span{text: t, space: isSpace, afterPipe: prevWasPipe && !isSpace})
-		if !isSpace { prevWasPipe = (t == "|") }
+		if !isSpace {
+			prevWasPipe = (t == "|")
+		}
 		cur.Reset()
 	}
 
@@ -332,10 +367,16 @@ func spanize(s string) []span {
 		switch {
 		case inBacktick:
 			cur.WriteRune(ch)
-			if ch == '`' { inBacktick = false; flush(false) }
+			if ch == '`' {
+				inBacktick = false
+				flush(false)
+			}
 		case inQuote:
 			cur.WriteRune(ch)
-			if ch == quoteChar { inQuote = false; flush(false) }
+			if ch == quoteChar {
+				inQuote = false
+				flush(false)
+			}
 		case ch == '`':
 			flush(false)
 			inBacktick = true
@@ -383,12 +424,24 @@ func isSyntaxOp(t string) bool {
 }
 
 func isNumericStr(t string) bool {
-	if t == "" { return false }
+	if t == "" {
+		return false
+	}
 	dot := false
 	for i, ch := range t {
-		if i == 0 && (ch == '-' || ch == '+') { continue }
-		if ch == '.' { if dot { return false }; dot = true; continue }
-		if ch < '0' || ch > '9' { return false }
+		if i == 0 && (ch == '-' || ch == '+') {
+			continue
+		}
+		if ch == '.' {
+			if dot {
+				return false
+			}
+			dot = true
+			continue
+		}
+		if ch < '0' || ch > '9' {
+			return false
+		}
 	}
 	return true
 }
@@ -399,23 +452,29 @@ func isNumericStr(t string) bool {
 
 func (sh *Shell) completionOptions(line string, cursor int) []string {
 	prefix := line[:cursor]
-	word   := lastWord(prefix)
-	toks   := strings.Fields(prefix)
-	isCmd  := len(toks) == 0 || (len(toks) == 1 && !strings.HasSuffix(prefix, " "))
+	word := lastWord(prefix)
+	toks := strings.Fields(prefix)
+	isCmd := len(toks) == 0 || (len(toks) == 1 && !strings.HasSuffix(prefix, " "))
 
 	var opts []string
 
 	if isCmd {
 		for _, b := range allBuiltinNames() {
-			if strings.HasPrefix(b, word) { opts = append(opts, b) }
+			if strings.HasPrefix(b, word) {
+				opts = append(opts, b)
+			}
 		}
 		for name := range sh.aliases {
-			if strings.HasPrefix(name, word) { opts = append(opts, name) }
+			if strings.HasPrefix(name, word) {
+				opts = append(opts, name)
+			}
 		}
 	} else if strings.HasPrefix(word, "$") {
 		pfx := word[1:]
 		for k := range sh.vars {
-			if strings.HasPrefix(k, pfx) { opts = append(opts, "$"+k) }
+			if strings.HasPrefix(k, pfx) {
+				opts = append(opts, "$"+k)
+			}
 		}
 	} else {
 		// Path completion
@@ -431,7 +490,9 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 				name := e.Name()
 				if strings.HasPrefix(name, filePfx) {
 					pfxBase := word[:len(word)-len(filePfx)]
-					if e.IsDir() { name += "/" }
+					if e.IsDir() {
+						name += "/"
+					}
 					opts = append(opts, pfxBase+name)
 				}
 			}
@@ -439,7 +500,9 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 		// Box key completion after "box get/rm/rename/tag"
 		if len(toks) >= 2 && toks[0] == "box" {
 			for _, k := range sh.box.Keys() {
-				if strings.HasPrefix(k, word) { opts = append(opts, k) }
+				if strings.HasPrefix(k, word) {
+					opts = append(opts, k)
+				}
 			}
 		}
 	}
@@ -447,71 +510,75 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 }
 
 func lastWord(s string) string {
-	if strings.HasSuffix(s, " ") { return "" }
+	if strings.HasSuffix(s, " ") {
+		return ""
+	}
 	parts := strings.Fields(s)
-	if len(parts) == 0 { return "" }
+	if len(parts) == 0 {
+		return ""
+	}
 	return parts[len(parts)-1]
 }
 
 func allBuiltinNames() []string {
 	return []string{
 		// Navigation
-		"cd","pwd","pushd","popd","dirs",
+		"cd", "pwd", "pushd", "popd", "dirs",
 		// Listing
-		"ls","ll","la","tree","du","df",
+		"ls", "ll", "la", "tree", "du", "df",
 		// File operations
-		"cat","head","tail","touch","mkdir","rmdir","rm","cp","mv","ln",
-		"readlink","realpath","basename","dirname","mktemp","mkfifo",
+		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
+		"readlink", "realpath", "basename", "dirname", "mktemp", "mkfifo",
 		// Inspection
-		"wc","stat","file","find","diff",
+		"wc", "stat", "file", "find", "diff",
 		// Text processing
-		"grep","sed","awk","cut","tr","sort","uniq","tee","split","xargs",
-		"nl","fold","expand","unexpand","column","paste","comm","shuf",
-		"numfmt","rev","strings","xxd","od",
+		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "tee", "split", "xargs",
+		"nl", "fold", "expand", "unexpand", "column", "paste", "comm", "shuf",
+		"numfmt", "rev", "strings", "xxd", "od",
 		// Permissions
-		"chmod","chown",
+		"chmod", "chown",
 		// Process management
-		"ps","kill","sleep","jobs","nice","timeout","pgrep","pkill","nohup",
-		"top","lsof","vmstat","iostat",
+		"ps", "kill", "sleep", "jobs", "nice", "timeout", "pgrep", "pkill", "nohup",
+		"top", "lsof", "vmstat", "iostat",
 		// System info
-		"uname","uptime","date","cal","hostname","whoami","id","groups","who","w",
-		"free","lscpu","lsusb","lspci","dmesg","lsblk","mount","umount","blkid",
-		"journalctl","systemctl","service",
+		"uname", "uptime", "date", "cal", "hostname", "whoami", "id", "groups", "who", "w",
+		"free", "lscpu", "lsusb", "lspci", "dmesg", "lsblk", "mount", "umount", "blkid",
+		"journalctl", "systemctl", "service",
 		// Networking
-		"ping","curl","wget","nslookup","dig","ifconfig","ip",
-		"ss","netstat","traceroute","mtr","openssl","ssh","scp","rsync",
-		"httpget","httppost","jq",
+		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
+		"ss", "netstat", "traceroute", "mtr", "openssl", "ssh", "scp", "rsync",
+		"httpget", "httppost", "jq",
 		// Hashing / archives
-		"md5sum","sha1sum","sha256sum","md5","sha1","sha256",
-		"tar","gzip","gunzip","zip","unzip",
+		"md5sum", "sha1sum", "sha256sum", "md5", "sha1", "sha256",
+		"tar", "gzip", "gunzip", "zip", "unzip",
 		// Text generation
-		"echo","printf","yes","seq","base64","bc","factor","random",
+		"echo", "printf", "yes", "seq", "base64", "bc", "factor", "random",
 		// Variables / env
-		"set","unset","vars","export","import","env","printenv",
+		"set", "unset", "vars", "export", "import", "env", "printenv",
 		// Identification
-		"alias","unalias","aliases","which","type",
+		"alias", "unalias", "aliases", "which", "type",
 		// Scripting helpers
-		"eval","exec","test","read","mapfile","readarray","declare","source",
-		"true","false","pass",
+		"eval", "exec", "test", "read", "mapfile", "readarray", "declare", "source",
+		"true", "false", "pass",
 		// Session
-		"box","history","clear","help","man","watch","exit","quit",
+		"box", "history", "clear", "help", "man", "watch", "exit", "quit",
 		// Fun
-		"figlet","matrix","lolcat","drawbox","notify",
+		"figlet", "matrix", "lolcat", "drawbox", "notify",
 		// Scripting control flow (also keywords, shown green when first token)
-		"if","for","while","func","print","println","return",
-		"match","unless","try","repeat","do",
+		"if", "for", "while", "func", "print", "println", "return",
+		"match", "unless", "try", "repeat", "do",
 		// String / array / number ops (pipe operators and standalone commands)
-		"upper","lower","title","trim","ltrim","rtrim","strip",
-		"len","reverse","repeat","replace","replace1","sub","pad","lpad","center",
-		"startswith","endswith","contains","match","isnum","isalpha","isalnum",
-		"isspace","isupper","islower",
-		"lines","words","chars","join","concat","prepend",
-		"first","last","nth","slice","push","pop","flatten",
-		"arr_uniq","arr_sort","arr_reverse","arr_len","arr_join",
-		"arr_contains","arr_map","arr_filter","arr_sum","arr_min","arr_max","arr_avg",
-		"add","mul","div","mod","pow",
-		"abs","ceil","floor","round","sqrt","negate","hex","oct","bin",
-		"tonum","tostr","toarray",
+		"upper", "lower", "title", "trim", "ltrim", "rtrim", "strip",
+		"len", "reverse", "repeat", "replace", "replace1", "sub", "pad", "lpad", "center",
+		"startswith", "endswith", "contains", "match", "isnum", "isalpha", "isalnum",
+		"isspace", "isupper", "islower",
+		"lines", "words", "chars", "join", "concat", "prepend",
+		"first", "last", "nth", "slice", "push", "pop", "flatten",
+		"arr_uniq", "arr_sort", "arr_reverse", "arr_len", "arr_join",
+		"arr_contains", "arr_map", "arr_filter", "arr_sum", "arr_min", "arr_max", "arr_avg",
+		"add", "mul", "div", "mod", "pow",
+		"abs", "ceil", "floor", "round", "sqrt", "negate", "hex", "oct", "bin",
+		"tonum", "tostr", "toarray",
 	}
 }
 
@@ -524,8 +591,16 @@ func visibleLen(s string) int {
 	n := 0
 	esc := false
 	for _, ch := range s {
-		if esc { if ch == 'm' { esc = false }; continue }
-		if ch == '\033' { esc = true; continue }
+		if esc {
+			if ch == 'm' {
+				esc = false
+			}
+			continue
+		}
+		if ch == '\033' {
+			esc = true
+			continue
+		}
 		n++
 	}
 	return n

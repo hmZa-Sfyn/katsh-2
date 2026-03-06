@@ -107,17 +107,59 @@ func parsePipeStage(seg string) PipeStage {
 			}
 		case "sort", "orderby", "order":
 			// "sort colname [asc|desc]"
-			fields := strings.Fields(rest)
-			args = fields
+			args = strings.Fields(rest)
 		case "fmt", "format":
 			args = []string{strings.ToLower(rest)}
 		default:
-			// where, grep, limit, skip, unique — split on spaces
-			args = strings.Fields(rest)
+			// Use quote-aware tokenization so  replace "old" "new"  works
+			args = tokenizeUnquoted(rest)
 		}
 	}
 
 	return PipeStage{Op: op, Args: args}
+}
+
+// tokenizeUnquoted splits a string on whitespace respecting quotes,
+// and strips the surrounding quote characters from each token.
+// e.g.  replace "hello world" "bye"  →  ["hello world", "bye"]
+func tokenizeUnquoted(s string) []string {
+	var tokens []string
+	var cur strings.Builder
+	inQuote := false
+	quoteChar := rune(0)
+
+	for _, ch := range strings.TrimSpace(s) {
+		switch {
+		case inQuote:
+			if ch == quoteChar {
+				inQuote = false
+				// end of quoted token — flush
+				tokens = append(tokens, cur.String())
+				cur.Reset()
+			} else {
+				cur.WriteRune(ch)
+			}
+		case ch == '"' || ch == '\'':
+			// flush any bare word before the quote
+			if cur.Len() > 0 {
+				tokens = append(tokens, cur.String())
+				cur.Reset()
+			}
+			inQuote = true
+			quoteChar = ch
+		case ch == ' ' || ch == '\t':
+			if cur.Len() > 0 {
+				tokens = append(tokens, cur.String())
+				cur.Reset()
+			}
+		default:
+			cur.WriteRune(ch)
+		}
+	}
+	if cur.Len() > 0 {
+		tokens = append(tokens, cur.String())
+	}
+	return tokens
 }
 
 // splitOnPipes splits a command string on | characters,
