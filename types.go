@@ -20,10 +20,11 @@ const (
 // Result is the structured output of any command execution.
 // Commands either produce a Table (rows + cols) or raw Text.
 type Result struct {
-	Cols    []string // ordered column names
-	Rows    []Row    // data rows (when IsTable == true)
-	Text    string   // raw text output (when IsTable == false)
-	IsTable bool
+	Cols      []string // ordered column names
+	Rows      []Row    // data rows (when IsTable == true)
+	Text      string   // raw text output (when IsTable == false)
+	IsTable   bool
+	ValueKind string   // "string" | "number" | "array" | "table" | "" (general text)
 }
 
 // NewTable creates a table Result.
@@ -107,7 +108,14 @@ func formatInt(n int) string {
 	return s
 }
 
-// ShArray holds an ordered list of string values (shell array).
+// ShArray is the shell array type.
+// Values stored in sh.vars use the internal "[item\x00item\x00...]" format.
+// This struct is used by shell.go's arrays map.
 type ShArray struct {
 	Items []string
+}
+
+// NewTyped creates a Result carrying a typed scalar value.
+func NewTyped(text, kind string) *Result {
+	return &Result{Text: text, IsTable: false, ValueKind: kind}
 }

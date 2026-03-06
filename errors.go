@@ -3,59 +3,99 @@ package main
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Rich error reporting with location, hints, and fix suggestions
+//  Rich error reporting — shows the full source line with the bad span
+//  underlined using ~~~ and pointed at with a caret + label.
+//
+//  Example output:
+//
+//    SyntaxError[E002] expected ':' in while statement
+//    ╭─ line 1
+//    │  while x < 100 echo $x
+//    │         ~~~~~~~
+//    │         ^── error here
+//    ╰─ 💡 hint: Check for missing colons, brackets, or mismatched quotes
+//       fix :  while x < 100: echo $x
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ShellError is a structured error with context, hint, and fix suggestion.
 type ShellError struct {
-	Code    string // e.g. "E001"
-	Kind    string // e.g. "SyntaxError", "TypeError", "CommandNotFound"
-	Message string // short message
-	Detail  string // longer explanation
-	Source  string // the line of source that caused it
-	Col     int    // column offset (0-based, -1 = unknown)
-	Line    int    // line number (1-based, 0 = unknown)
-	Hint    string // what to check
-	Fix     string // suggested fix / example
-	Trace   []TraceFrame
+	Code     string // e.g. "E001"
+	Kind     string // e.g. "SyntaxError", "TypeError", "CommandNotFound"
+	Message  string // short message
+	Detail   string // longer explanation
+	Source   string // the FULL input line that caused the error
+	Col      int    // column offset of error start (0-based, -1 = unknown)
+	Span     int    // length of the error token in runes (0 = use ^, >0 = use ~~~)
+	Line     int    // line number (1-based, 0 = unknown)
+	Hint     string // what to check
+	Fix      string // suggested fix / example
+	Trace    []TraceFrame
 }
 
 type TraceFrame struct {
 	At  string // e.g. "line 3 in func bogo_sort"
-	Src string // source snippet
+	Src string  // source snippet
 }
 
 func (e *ShellError) Error() string { return e.Message }
 
-// PrintError renders a rich, coloured error block to stdout.
+// PrintError renders a rich, coloured error block to stderr.
 func PrintError(err *ShellError) {
-	if err == nil {
-		return
-	}
+	if err == nil { return }
 
 	// ── Header ──────────────────────────────────────────────────────────────
-	fmt.Printf("\n  %s%s[%s] %s%s\n",
-		ansiBold+ansiRed, err.Kind, err.Code, err.Message, ansiReset)
+	fmt.Printf("\n  %s%s[%s]%s %s%s%s\n",
+		ansiBold+ansiRed, err.Kind, err.Code, ansiReset,
+		ansiBold+ansiWhite, err.Message, ansiReset)
 
-	// ── Source + caret ───────────────────────────────────────────────────────
+	// ── Source block ─────────────────────────────────────────────────────────
 	if err.Source != "" {
-		loc := ""
+		// Location badge
 		if err.Line > 0 {
-			loc = fmt.Sprintf(" %s[line %d, col %d]%s", ansiGrey, err.Line, err.Col+1, ansiReset)
+			fmt.Printf("  %s╭─ line %d%s\n", ansiGrey, err.Line, ansiReset)
+		} else {
+			fmt.Printf("  %s╭─%s\n", ansiGrey, ansiReset)
 		}
-		fmt.Printf("  %s│%s %s%s%s%s\n", ansiGrey, ansiReset, ansiWhite, err.Source, ansiReset, loc)
+
+		// The full source line, with the error span highlighted in red+bold
+		displayLine := buildHighlightedLine(err.Source, err.Col, err.Span)
+		fmt.Printf("  %s│%s  %s\n", ansiGrey, ansiReset, displayLine)
+
+		// Underline row  ───  spaces + ~~~ (or ^)
 		if err.Col >= 0 {
-			pad := strings.Repeat(" ", err.Col+1)
-			fmt.Printf("  %s│%s%s%s^── here%s\n", ansiGrey, ansiReset, pad, ansiRed, ansiReset)
+			// Count visual columns (rune-aware) up to Col
+			pre := runePrefix(err.Source, err.Col)
+			pad := strings.Repeat(" ", pre+3) // +3 for "│  " prefix
+
+			spanLen := err.Span
+			if spanLen <= 0 {
+				// No span given: auto-detect token length at Col
+				spanLen = tokenLenAt(err.Source, err.Col)
+			}
+			if spanLen <= 0 { spanLen = 1 }
+
+			underline := strings.Repeat("~", spanLen)
+			fmt.Printf("  %s│%s  %s%s%s%s\n",
+				ansiGrey, ansiReset,
+				pad, ansiRed+ansiBold, underline, ansiReset)
+
+			// Caret + label on next line
+			fmt.Printf("  %s│%s  %s%s^── here%s\n",
+				ansiGrey, ansiReset,
+				pad, ansiRed, ansiReset)
 		}
+
+		fmt.Printf("  %s│%s\n", ansiGrey, ansiReset)
 	}
 
 	// ── Detail ───────────────────────────────────────────────────────────────
 	if err.Detail != "" {
-		fmt.Printf("  %s│%s %s%s%s\n", ansiGrey, ansiReset, ansiDim+ansiWhite, err.Detail, ansiReset)
+		fmt.Printf("  %s│%s  %s%s%s\n", ansiGrey, ansiReset, ansiDim+ansiWhite, err.Detail, ansiReset)
+		fmt.Printf("  %s│%s\n", ansiGrey, ansiReset)
 	}
 
 	// ── Stack trace ──────────────────────────────────────────────────────────
@@ -65,11 +105,14 @@ func PrintError(err *ShellError) {
 			fmt.Printf("  %s│  %s%d: %s%s  %s%s%s\n",
 				ansiGrey, ansiDim, i+1, ansiCyan, f.At, ansiGrey, f.Src, ansiReset)
 		}
+		fmt.Printf("  %s│%s\n", ansiGrey, ansiReset)
 	}
 
 	// ── Hint ─────────────────────────────────────────────────────────────────
 	if err.Hint != "" {
-		fmt.Printf("  %s╰─ %shint:%s %s\n", ansiGrey, ansiYellow, ansiReset, err.Hint)
+		fmt.Printf("  %s╰─ 💡 hint:%s %s\n", ansiYellow, ansiReset, err.Hint)
+	} else {
+		fmt.Printf("  %s╰─%s\n", ansiGrey, ansiReset)
 	}
 
 	// ── Fix ──────────────────────────────────────────────────────────────────
@@ -81,6 +124,69 @@ func PrintError(err *ShellError) {
 	}
 }
 
+// buildHighlightedLine returns the source line with the error span
+// printed in bold red, and the rest in normal white.
+func buildHighlightedLine(src string, col, span int) string {
+	if col < 0 {
+		return ansiWhite + src + ansiReset
+	}
+	runes := []rune(src)
+	if col >= len(runes) {
+		return ansiWhite + src + ansiReset
+	}
+
+	if span <= 0 {
+		span = tokenLenAt(src, col)
+	}
+	if span <= 0 { span = 1 }
+	end := col + span
+	if end > len(runes) { end = len(runes) }
+
+	before := string(runes[:col])
+	bad    := string(runes[col:end])
+	after  := string(runes[end:])
+
+	return ansiWhite + before +
+		ansiBold + ansiRed + bad + ansiReset +
+		ansiWhite + after + ansiReset
+}
+
+// runePrefix returns the number of runes before byte index col in s.
+// (We store Col as byte offset from the lexer, but display in rune columns.)
+func runePrefix(s string, byteCol int) int {
+	if byteCol <= 0 { return 0 }
+	if byteCol > len(s) { byteCol = len(s) }
+	return utf8.RuneCountInString(s[:byteCol])
+}
+
+// tokenLenAt returns the length (in runes) of the identifier/word
+// starting at byte offset col in s.
+func tokenLenAt(s string, col int) int {
+	if col < 0 || col >= len(s) { return 1 }
+	runes := []rune(s)
+	// Find rune index from byte col
+	runeIdx := utf8.RuneCountInString(s[:col])
+	if runeIdx >= len(runes) { return 1 }
+	// Scan forward while it looks like the same token
+	start := runeIdx
+	ch := runes[start]
+	isOp := strings.ContainsRune("=<>!+-*/%&|^~", ch)
+	i := start + 1
+	for i < len(runes) {
+		c := runes[i]
+		if isOp {
+			if !strings.ContainsRune("=<>!+-*/%&|^~", c) { break }
+		} else {
+			if c == ' ' || c == '\t' || c == '(' || c == ')' ||
+				c == '{' || c == '}' || c == ';' || c == ':' { break }
+		}
+		i++
+	}
+	n := i - start
+	if n < 1 { n = 1 }
+	return n
+}
+
 // ── Constructor helpers ──────────────────────────────────────────────────────
 
 func errUnknownCmd(cmd, src string) *ShellError {
@@ -90,12 +196,14 @@ func errUnknownCmd(cmd, src string) *ShellError {
 	if similar != "" {
 		fix = fmt.Sprintf("did you mean: %s", similar)
 	}
+	col := strings.Index(src, cmd)
 	return &ShellError{
 		Code:    "E001",
 		Kind:    "CommandNotFound",
 		Message: fmt.Sprintf("command not found: %q", cmd),
 		Source:  src,
-		Col:     0,
+		Col:     col,
+		Span:    len(cmd),
 		Hint:    hint,
 		Fix:     fix,
 	}
@@ -108,8 +216,8 @@ func errSyntax(msg, src string, col int) *ShellError {
 		Message: msg,
 		Source:  src,
 		Col:     col,
+		Span:    0,
 		Hint:    "Check for missing colons, brackets, or mismatched quotes",
-		Fix:     "",
 	}
 }
 
@@ -136,36 +244,43 @@ func errRuntime(msg, src string, trace []TraceFrame) *ShellError {
 }
 
 func errUndefined(varName, src string) *ShellError {
+	col := strings.Index(src, varName)
+	if col < 0 { col = strings.Index(src, "$"+varName) }
 	return &ShellError{
 		Code:    "E005",
 		Kind:    "UndefinedVariable",
 		Message: fmt.Sprintf("variable %q is not defined", varName),
 		Source:  src,
-		Col:     strings.Index(src, varName),
+		Col:     col,
+		Span:    len(varName),
 		Hint:    "Declare it first with:  " + varName + " = <value>",
 		Fix:     varName + " = \"\"",
 	}
 }
 
 func errDivZero(src string) *ShellError {
+	col := strings.Index(src, "/")
 	return &ShellError{
 		Code:    "E006",
 		Kind:    "DivisionByZero",
 		Message: "division by zero",
 		Source:  src,
-		Col:     strings.Index(src, "/"),
+		Col:     col,
+		Span:    1,
 		Hint:    "Check the denominator before dividing",
 		Fix:     "if denom != 0: result = num / denom",
 	}
 }
 
 func errArgCount(funcName string, want, got int, src string) *ShellError {
+	col := strings.Index(src, funcName)
 	return &ShellError{
 		Code:    "E007",
 		Kind:    "ArgumentError",
 		Message: fmt.Sprintf("%s() expects %d argument(s), got %d", funcName, want, got),
 		Source:  src,
-		Col:     -1,
+		Col:     col,
+		Span:    len(funcName),
 		Hint:    fmt.Sprintf("func %s takes %d param(s)", funcName, want),
 	}
 }
@@ -181,11 +296,8 @@ func errSimple(msg string) *ShellError {
 
 // wrapErr wraps a plain Go error as a ShellError for nice display.
 func wrapErr(err error, src string) *ShellError {
-	if err == nil {
-		return nil
-	}
+	if err == nil { return nil }
 	msg := err.Error()
-	// Detect common patterns
 	if strings.Contains(msg, "no such file") {
 		return &ShellError{
 			Code:    "E010",
@@ -209,26 +321,38 @@ func wrapErr(err error, src string) *ShellError {
 		}
 	}
 	if strings.Contains(msg, "not found") {
-		// Command not found from exec
 		parts := strings.SplitN(msg, ":", 2)
 		cmd := strings.TrimSpace(parts[0])
 		return errUnknownCmd(cmd, src)
+	}
+	// Try to locate a word from the error message inside src
+	col := -1
+	span := 0
+	msgWords := strings.Fields(msg)
+	for _, w := range msgWords {
+		if len(w) > 3 {
+			if idx := strings.Index(src, w); idx >= 0 {
+				col = idx
+				span = len(w)
+				break
+			}
+		}
 	}
 	return &ShellError{
 		Code:    "E000",
 		Kind:    "Error",
 		Message: msg,
 		Source:  src,
-		Col:     -1,
+		Col:     col,
+		Span:    span,
 	}
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-// findSimilarCmd finds the closest builtin name using simple edit-distance.
 func findSimilarCmd(cmd string) string {
 	best := ""
-	bestDist := 4 // only suggest if very close
+	bestDist := 4
 	for _, b := range allBuiltinNames() {
 		d := editDistance(cmd, b)
 		if d < bestDist {
@@ -246,9 +370,7 @@ func editDistance(a, b string) int {
 		dp[i] = make([]int, lb+1)
 		dp[i][0] = i
 	}
-	for j := 0; j <= lb; j++ {
-		dp[0][j] = j
-	}
+	for j := 0; j <= lb; j++ { dp[0][j] = j }
 	for i := 1; i <= la; i++ {
 		for j := 1; j <= lb; j++ {
 			if a[i-1] == b[j-1] {
@@ -262,20 +384,12 @@ func editDistance(a, b string) int {
 }
 
 func min3(a, b, c int) int {
-	if a < b {
-		if a < c {
-			return a
-		}
-		return c
-	}
-	if b < c {
-		return b
-	}
+	if a < b { if a < c { return a }; return c }
+	if b < c { return b }
 	return c
 }
 
 func extractPath(msg string) string {
-	// Try to get path from error message like "open /foo/bar: no such file"
 	parts := strings.Fields(msg)
 	for _, p := range parts {
 		if strings.HasPrefix(p, "/") || strings.HasPrefix(p, "./") {
@@ -290,10 +404,7 @@ func extractPath(msg string) string {
 func errSyntaxAt(msg, src, excerpt string, line, col int) *ShellError {
 	if line == 0 {
 		lx := Lex(src)
-		if len(lx.Tokens) > 0 {
-			line = lx.Tokens[0].Line
-			col = lx.Tokens[0].Col
-		}
+		if len(lx.Tokens) > 0 { line = lx.Tokens[0].Line; col = lx.Tokens[0].Col }
 	}
 	return &ShellError{
 		Code:    "E002",
@@ -309,28 +420,22 @@ func errSyntaxAt(msg, src, excerpt string, line, col int) *ShellError {
 func errTypeAt(msg, src string, line, col int) *ShellError {
 	if line == 0 {
 		lx := Lex(src)
-		if len(lx.Tokens) > 0 {
-			line = lx.Tokens[0].Line
-		}
+		if len(lx.Tokens) > 0 { line = lx.Tokens[0].Line }
 	}
-	return &ShellError{Code: "E003", Kind: "TypeError", Message: msg, Source: src, Line: line, Col: col}
+	return &ShellError{Code:"E003", Kind:"TypeError", Message:msg, Source:src, Line:line, Col:col}
 }
 
 func errDivZeroAt(src string, col int) *ShellError {
 	lx := Lex(src)
 	line := 1
 	for _, tok := range lx.Tokens {
-		if tok.Text == "/" {
-			line = tok.Line
-			col = tok.Col
-			break
-		}
+		if tok.Text == "/" { line = tok.Line; col = tok.Col; break }
 	}
 	return &ShellError{
-		Code: "E006", Kind: "DivisionByZero", Message: "division by zero",
-		Source: src, Line: line, Col: col,
-		Hint: "Check the denominator before dividing",
-		Fix:  "if denom != 0: result = num / denom",
+		Code:"E006", Kind:"DivisionByZero", Message:"division by zero",
+		Source:src, Line:line, Col:col, Span:1,
+		Hint:"Check the denominator before dividing",
+		Fix:"if denom != 0: result = num / denom",
 	}
 }
 
@@ -338,16 +443,13 @@ func errReadonly(name, src string) *ShellError {
 	lx := Lex(src)
 	line, col := 1, 0
 	for _, tok := range lx.Tokens {
-		if tok.Text == name {
-			line = tok.Line
-			col = tok.Col
-			break
-		}
+		if tok.Text == name { line = tok.Line; col = tok.Col; break }
 	}
 	return &ShellError{
-		Code: "E008", Kind: "ReadonlyError",
-		Message: fmt.Sprintf("cannot assign to readonly variable %q", name),
-		Source:  src, Line: line, Col: col,
-		Hint: "Remove the 'readonly' declaration or use a different name",
+		Code:"E008", Kind:"ReadonlyError",
+		Message:fmt.Sprintf("cannot assign to readonly variable %q", name),
+		Source:src, Line:line, Col:col, Span:len(name),
+		Hint:"Remove the 'readonly' declaration or use a different name",
 	}
 }
+

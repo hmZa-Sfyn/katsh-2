@@ -266,6 +266,10 @@ func handleBuiltin(sh *Shell, command string, args []string) (*Result, bool, err
 
 	// ── Forward to builtins2 (50 additional commands) ──────────────────────
 	default:
+		// String / array / number operations as standalone commands
+		if r, ok, err := handleStringOp(sh, command, args); ok {
+			return r, ok, err
+		}
 		if r, ok, err := handleBuiltin2(sh, command, args); ok {
 			return r, ok, err
 		}
@@ -2777,84 +2781,25 @@ func builtinWhich(sh *Shell, args []string) (*Result, bool, error) {
 func builtinType(sh *Shell, args []string) (*Result, bool, error) {
 	return builtinWhich(sh, args)
 }
+
 func isBuiltin(cmd string) bool {
 	builtins := []string{
-		"select", "where", "limit", "skip", "grep", "sort", "count", "unique", "fmt", "add", "rename",
-
-		// Navigation
-		"cd", "pwd", "pushd", "popd", "dirs",
-
-		// Listing
-		"ls", "ll", "la", "tree", "du", "df",
-
-		// File operations
-		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm",
-		"cp", "mv", "ln", "readlink", "realpath", "basename",
-		"dirname", "mktemp", "mkfifo",
-
-		// Inspection
-		"wc", "stat", "file", "find", "diff",
-
-		// Text processing
-		"grep", "sed", "awk", "cut", "tr", "sort", "uniq",
-		"split", "tee", "xargs", "nl", "fold", "expand",
-		"unexpand", "column", "paste", "comm", "shuf",
-		"numfmt", "reverse", "strings", "xxd", "od",
-
-		// Permissions
-		"chmod", "chown",
-
-		// Process management
-		"ps", "kill", "sleep", "jobs", "nice", "timeout",
-		"pgrep", "pkill", "nohup", "top", "lsof", "vmstat",
-		"iostat",
-
-		// System info
-		"uname", "uptime", "date", "cal", "hostname",
-		"whoami", "id", "groups", "who", "w", "free",
-		"lscpu", "lsusb", "lspci", "dmesg", "lsblk",
-		"mount", "umount", "blkid", "journalctl",
-		"systemctl", "service",
-
-		// Network
-		"ping", "curl", "wget", "nslookup", "dig",
-		"ifconfig", "ip", "ss", "netstat", "traceroute",
-		"mtr", "openssl", "ssh", "scp", "rsync",
-		"httpget", "httppost", "jq",
-
-		// Hashing
-		"md5sum", "md5", "sha1sum", "sha1", "sha256sum", "sha256",
-
-		// Archiving
+		"cd", "pwd", "pushd", "popd", "dirs", "ls", "ll", "la", "tree", "du", "df",
+		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
+		"wc", "stat", "file", "find", "diff", "grep", "sed", "awk", "cut", "tr",
+		"sort", "uniq", "tee", "split", "xargs", "chmod", "chown",
+		"ps", "kill", "sleep", "jobs", "uname", "uptime", "date", "cal",
+		"hostname", "whoami", "id", "groups", "w", "who",
+		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
+		"md5sum", "sha1sum", "sha256sum", "md5", "sha1", "sha256",
 		"tar", "gzip", "gunzip", "zip", "unzip",
-
-		// Text generation & math
-		"echo", "printf", "print", "println", "yes", "seq",
-		"base64", "bc", "factor", "random",
-
-		// Variables & environment
+		"echo", "printf", "yes", "seq", "base64", "rev",
 		"set", "unset", "vars", "export", "env", "printenv",
-
-		// Import / export
-		"import",
-
-		// Scripting helpers
-		"eval", "exec", "test", "read", "mapfile", "declare",
-		"source", ".", "true", "false", "pass",
-
-		// Identification
-		"which", "type", "alias", "unalias", "aliases", "man",
-
-		// Box storage
-		"box",
-
-		// Fun
-		"figlet", "matrix", "lolcat", "drawbox", "notify",
-
-		// Session
-		"history", "watch", "clear", "help", "exit", "quit",
+		"alias", "unalias", "aliases", "which", "type",
+		"bc", "factor", "random",
+		"box", "history", "clear", "help", "man", "true", "false",
+		"exit", "quit", "source", "watch",
 	}
-
 	for _, b := range builtins {
 		if b == cmd {
 			return true
@@ -2883,38 +2828,7 @@ func builtinBC(sh *Shell, args []string) (*Result, bool, error) {
 }
 
 // evalSimpleExpr handles very basic math: +, -, *, /
-func evalSimpleExpr(expr string) string {
-	expr = strings.TrimSpace(expr)
-	// Try parsing a simple "a op b" expression
-	for _, op := range []string{"+", "-", "*", "/"} {
-		parts := strings.SplitN(expr, op, 2)
-		if len(parts) == 2 {
-			var a, b float64
-			if _, err := fmt.Sscanf(strings.TrimSpace(parts[0]), "%f", &a); err != nil {
-				continue
-			}
-			if _, err := fmt.Sscanf(strings.TrimSpace(parts[1]), "%f", &b); err != nil {
-				continue
-			}
-			var result float64
-			switch op {
-			case "+":
-				result = a + b
-			case "-":
-				result = a - b
-			case "*":
-				result = a * b
-			case "/":
-				if b == 0 {
-					return "division by zero"
-				}
-				result = a / b
-			}
-			return strconv.FormatFloat(result, 'f', -1, 64)
-		}
-	}
-	return "cannot evaluate: " + expr
-}
+// evalSimpleExpr moved to stringops.go
 
 func builtinFactor(sh *Shell, args []string) (*Result, bool, error) {
 	if len(args) == 0 {
@@ -3374,7 +3288,7 @@ func builtinHelp() (*Result, bool, error) {
   env / printenv          show OS environment → table
 
 ` + c(ansiBold+ansiCyan, "  ── IMPORT / EXPORT (extensions) ───────────────────────────") + `
-  import "file.ksh"       source a local script file
+  import "file.ssh"       source a local script file
   import "https://..."    fetch + cache remote script (24 h TTL)
   import "user/repo/path" fetch from GitHub (raw)
   export func <name>      mark function as exported

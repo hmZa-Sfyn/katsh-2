@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 )
 
@@ -68,7 +69,14 @@ func Parse(raw string) *ParsedCommand {
 	}
 
 	// First segment = base command
-	pc.Args = tokenize(segments[0])
+	// Special case: if the first segment is a quoted string or bare number,
+	// synthesize a __literal__ command so it can be piped.
+	firstSeg := strings.TrimSpace(segments[0])
+	if isLiteralSegment(firstSeg) {
+		pc.Args = []string{"__literal__", firstSeg}
+	} else {
+		pc.Args = tokenize(segments[0])
+	}
 
 	// Remaining segments = pipe stages
 	for _, seg := range segments[1:] {
@@ -175,4 +183,23 @@ func tokenize(s string) []string {
 		tokens = append(tokens, cur.String())
 	}
 	return tokens
+}
+
+// isLiteralSegment returns true when the segment is a quoted string or
+// a standalone number, meaning it should be treated as a piped value.
+func isLiteralSegment(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) == 0 {
+		return false
+	}
+	// Quoted string: "..." or '...'
+	if (strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`)) ||
+		(strings.HasPrefix(s, `'`) && strings.HasSuffix(s, `'`)) {
+		return true
+	}
+	// Bare number (integer or float, optional leading -)
+	if _, err := strconv.ParseFloat(s, 64); err == nil {
+		return true
+	}
+	return false
 }

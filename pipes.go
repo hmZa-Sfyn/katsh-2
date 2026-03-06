@@ -53,6 +53,18 @@ func applyPipe(r *Result, p PipeStage) (*Result, error) {
 	case "rename", "renamecol":
 		return pipeRenameCol(r, p.Args)
 	default:
+		// String / array / number operations
+		if isStringOp(p.Op) {
+			result, err := applyStringOp(r, p.Op, p.Args)
+			if err != nil {
+				if se, ok := err.(*ShellError); ok {
+					PrintError(se)
+					return r, nil // show error but continue
+				}
+				return r, err
+			}
+			if result != nil { return result, nil }
+		}
 		return r, fmt.Errorf("unknown pipe operator '%s'", p.Op)
 	}
 }

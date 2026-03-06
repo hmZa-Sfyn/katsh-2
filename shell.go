@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -125,6 +126,35 @@ func (sh *Shell) execLine(raw string) int {
 	command := pc.Args[0]
 	args := pc.Args[1:]
 
+	// ── Literal value pipe: "hello" | split " "  /  42 | add 8 ──────────
+	if command == "__literal__" && len(args) > 0 {
+		raw := args[0]
+		var result *Result
+		// Quoted string → strip quotes, kind=string
+		if (strings.HasPrefix(raw, `"`) && strings.HasSuffix(raw, `"`)) ||
+			(strings.HasPrefix(raw, `'`) && strings.HasSuffix(raw, `'`)) {
+			result = NewTyped(raw[1:len(raw)-1], "string")
+		} else {
+			// Numeric literal → kind=number
+			result = NewTyped(raw, "number")
+		}
+		if len(pc.Pipes) == 0 {
+			sh.printResult(result)
+			return 0
+		}
+		var err error
+		result, err = ApplyPipes(result, pc.Pipes)
+		if err != nil {
+			sh.printErr(wrapErr(err, strings.Join(pc.Args, " ")))
+			return 1
+		}
+		sh.printResult(result)
+		if pc.ShouldStore && result != nil {
+			sh.storeResult(pc, "literal", result)
+		}
+		return 0
+	}
+
 	// ── Built-ins ─────────────────────────────────────────────────────────
 	result, wasBuiltin, err := handleBuiltin(sh, command, args)
 
@@ -218,6 +248,42 @@ func (sh *Shell) printResult(r *Result) {
 		if text == "" {
 			return
 		}
+
+		// Array result: render as a table with index column
+		if r.ValueKind == KindArray {
+			items := splitArrayResult(text)
+			cols := []string{"index", "value"}
+			rows := make([]Row, len(items))
+			for i, it := range items {
+				rows[i] = Row{"index": strconv.Itoa(i), "value": it}
+			}
+			if sh.captureMode {
+				for _, it := range items {
+					sh.captureOut.WriteString(it + "\n")
+				}
+				return
+			}
+			fmt.Println()
+			for _, line := range RenderTable(cols, rows) {
+				fmt.Println(line)
+			}
+			fmt.Println()
+			return
+		}
+
+		// Typed scalar (string/number): show with kind badge
+		if r.ValueKind == KindString || r.ValueKind == KindNumber {
+			if sh.captureMode {
+				sh.captureOut.WriteString(text)
+				return
+			}
+			badge := c(ansiGrey, "("+r.ValueKind+")")
+			fmt.Println()
+			fmt.Println("  " + text + "  " + badge)
+			fmt.Println()
+			return
+		}
+
 		if sh.captureMode {
 			sh.captureOut.WriteString(text)
 			return
