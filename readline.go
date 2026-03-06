@@ -439,9 +439,12 @@ func isKeyword(t string) bool {
 		"func", "return", "in", "range", "break", "continue",
 		"and", "or", "not", "true", "false", "null", "nil", "print", "println",
 		"match", "case", "default", "unless",
-		"try", "catch", "finally", "throw",
+		"try", "catch", "finally", "throw", "raise",
 		"repeat", "until", "pass", "local",
-		"import", "export":
+		"import", "export",
+		"switch", "enum", "struct",
+		"defer", "with", "goto", "label", "when",
+		"map", "set", "stack", "queue", "tuple", "matrix":
 		return true
 	}
 	return false
@@ -560,7 +563,7 @@ func allBuiltinNames() []string {
 		// Hashing / archives
 		"md5sum","sha1sum","sha256sum","md5","sha1","sha256",
 		"tar","gzip","gunzip","zip","unzip",
-		// Text generation
+		// Text generation / math
 		"echo","printf","yes","seq","base64","bc","factor","random",
 		// Variables / env
 		"set","unset","vars","export","import","env","printenv",
@@ -573,13 +576,14 @@ func allBuiltinNames() []string {
 		"box","history","clear","help","man","watch","exit","quit",
 		// Fun
 		"figlet","matrix","lolcat","drawbox","notify",
-		// Scripting control flow (also keywords, shown green when first token)
+		// Control flow keywords (also syntax-highlighted as keywords)
 		"if","for","while","func","print","println","return",
-		"match","unless","try","repeat","do",
-		// String / array / number ops (pipe operators and standalone commands)
+		"match","unless","try","repeat","do","switch","enum","struct",
+		"defer","with","throw","raise","goto","label","when",
+		// String / array / number pipe ops
 		"upper","lower","title","trim","ltrim","rtrim","strip",
 		"len","reverse","repeat","replace","replace1","sub","pad","lpad","center",
-		"startswith","endswith","contains","match","isnum","isalpha","isalnum",
+		"startswith","endswith","contains","isnum","isalpha","isalnum",
 		"isspace","isupper","islower",
 		"lines","words","chars","join","concat","prepend",
 		"first","last","nth","slice","push","pop","flatten",
@@ -588,6 +592,17 @@ func allBuiltinNames() []string {
 		"add","mul","div","mod","pow",
 		"abs","ceil","floor","round","sqrt","negate","hex","oct","bin",
 		"tonum","tostr","toarray",
+		// Advanced data type commands
+		"map_new","map_set","map_get","map_del","map_has","map_keys",
+		"map_values","map_len","map_show","map_merge",
+		"set_new","set_add","set_remove","set_has","set_union",
+		"set_intersect","set_diff","set_show","set_len",
+		"stack_new","stack_push","stack_pop","stack_peek","stack_len","stack_show",
+		"queue_new","enqueue","dequeue","queue_peek","queue_len","queue_show",
+		"tuple_get","tuple_len","tuple_show",
+		"matrix_new","matrix_get","matrix_set","matrix_add","matrix_mul",
+		"matrix_transpose","matrix_det","matrix_show","matrix_identity",
+		"typeof","dt_show",
 	}
 }
 

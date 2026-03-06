@@ -209,6 +209,8 @@ func (sh *Shell) evalRHS(rhs, src string) string {
 	rhs = strings.TrimSpace(rhs)
 	if rhs == "" { return "" }
 	if strings.HasPrefix(strings.ToLower(rhs), "if ") { return sh.evalInlineIf(rhs, src) }
+	// Advanced data type literals: map{}, set{}, stack{}, queue{}, tuple(), matrix()
+	if v, ok := sh.evalDataTypeLiteral(rhs); ok { return v }
 	if strings.HasPrefix(rhs,"[") && strings.HasSuffix(rhs,"]") { return sh.makeArray(sh.parseArrayLiteral(rhs)) }
 	if strings.HasPrefix(rhs,"`") && strings.HasSuffix(rhs,"`") { return sh.runSubshell(rhs[1:len(rhs)-1]) }
 	if strings.HasPrefix(rhs,`"`) && strings.HasSuffix(rhs,`"`) { return sh.interpolate(rhs[1:len(rhs)-1]) }
@@ -257,6 +259,17 @@ func (sh *Shell) arrayItems(name string) []string {
 	return strings.Split(content, arraySep)
 }
 func (sh *Shell) arrayGet(name, idx string) string {
+	raw := sh.vars[name]
+	// Map subscript: m["key"] or m[key]
+	if strings.HasPrefix(raw, mapPfx) {
+		return mapGet(raw, idx)
+	}
+	// Tuple subscript: t[0]
+	if strings.HasPrefix(raw, tupPfx) {
+		n, err := strconv.Atoi(idx)
+		if err != nil { return "" }
+		return tupleGet(raw, n)
+	}
 	items := sh.arrayItems(name)
 	if idx == "len" || idx == "#" { return strconv.Itoa(len(items)) }
 	i, err := strconv.Atoi(idx)

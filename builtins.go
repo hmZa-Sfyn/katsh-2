@@ -266,6 +266,10 @@ func handleBuiltin(sh *Shell, command string, args []string) (*Result, bool, err
 
 	// ── Forward to builtins2 (50 additional commands) ──────────────────────
 	default:
+		// Data type commands (map, set, stack, queue, tuple, matrix)
+		if r, ok, err := handleDataType(sh, command, args); ok {
+			return r, ok, err
+		}
 		// String / array / number operations as standalone commands
 		if r, ok, err := handleStringOp(sh, command, args); ok {
 			return r, ok, err
@@ -1368,7 +1372,7 @@ func builtinGrep(sh *Shell, args []string) (*Result, bool, error) {
 	}
 
 	if len(files) == 0 {
-		return nil, true, fmt.Errorf("grep: no files specified (stdin not supported in Katsh — use | grep in pipes)")
+		return nil, true, fmt.Errorf("grep: no files specified (stdin not supported in StructSH — use | grep in pipes)")
 	}
 
 	// Expand recursive
@@ -1794,7 +1798,7 @@ func builtinTee(sh *Shell, args []string) (*Result, bool, error) {
 	if len(args) < 2 {
 		return nil, true, fmt.Errorf("tee: usage: tee <file> (pipe input required)")
 	}
-	// In Katsh, tee reads from a file and writes to another (not stdin)
+	// In StructSH, tee reads from a file and writes to another (not stdin)
 	src := resolvePath(sh.cwd, args[0])
 	dst := resolvePath(sh.cwd, args[1])
 	data, err := os.ReadFile(src)
@@ -2784,91 +2788,22 @@ func builtinType(sh *Shell, args []string) (*Result, bool, error) {
 
 func isBuiltin(cmd string) bool {
 	builtins := []string{
-		// Navigation
-		"cd", "pwd", "pushd", "popd", "dirs",
-
-		// Listing
-		"ls", "ll", "la", "tree", "du", "df",
-
-		// File operations
-		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm",
-		"cp", "mv", "ln", "readlink", "realpath", "basename", "dirname",
-		"mktemp", "mkfifo",
-
-		// Inspection
-		"wc", "stat", "file", "find", "diff",
-
-		// Text processing (standalone form)
-		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "split",
-		"tee", "xargs", "nl", "fold", "expand", "unexpand", "column",
-		"paste", "comm", "shuf", "numfmt", "rev", "strings", "xxd", "od",
-
-		// Permissions
-		"chmod", "chown",
-
-		// Process management
-		"ps", "kill", "sleep", "jobs", "nice", "timeout", "pgrep", "pkill",
-		"nohup", "top", "lsof", "vmstat", "iostat",
-
-		// System info
-		"uname", "uptime", "date", "cal", "hostname", "whoami", "id",
-		"groups", "who", "w", "free", "lscpu", "lsusb", "lspci", "dmesg",
-		"lsblk", "mount", "umount", "blkid", "journalctl", "systemctl", "service",
-
-		// Network
-		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip", "ss",
-		"netstat", "traceroute", "mtr", "openssl", "ssh", "scp", "rsync",
-		"httpget", "httppost", "jq",
-
-		// Hashing
+		"cd", "pwd", "pushd", "popd", "dirs", "ls", "ll", "la", "tree", "du", "df",
+		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
+		"wc", "stat", "file", "find", "diff", "grep", "sed", "awk", "cut", "tr",
+		"sort", "uniq", "tee", "split", "xargs", "chmod", "chown",
+		"ps", "kill", "sleep", "jobs", "uname", "uptime", "date", "cal",
+		"hostname", "whoami", "id", "groups", "w", "who",
+		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
 		"md5sum", "sha1sum", "sha256sum", "md5", "sha1", "sha256",
-
-		// Archiving
 		"tar", "gzip", "gunzip", "zip", "unzip",
-
-		// Text generation & math
-		"echo", "printf", "print", "println", "yes", "seq", "base64",
-		"bc", "factor", "random",
-
-		// Variables & environment
+		"echo", "printf", "yes", "seq", "base64", "rev",
 		"set", "unset", "vars", "export", "env", "printenv",
-
-		// Import / source
-		"import", "source", ".", // . is usually treated as source
-
-		// Scripting helpers
-		"eval", "exec", "test", "[", "]", "read", "mapfile", "declare",
-		"true", "false", "pass",
-
-		// Identification
-		"which", "type", "alias", "unalias", "aliases", "man",
-
-		// Box storage
-		"box",
-
-		// Session / misc
-		"history", "watch", "clear", "help", "exit", "quit",
-
-		// ── Pipe / table operators (most important for syntax highlighting) ──
-		"select", "where", "sort", "limit", "skip", "count", "unique",
-		"reverse", "fmt", "add", "rename",
-
-		// ── String / array / number methods (very commonly used after | ) ──
-		"upper", "lower", "title", "trim", "ltrim", "rtrim", "strip",
-		"len", "reverse", "repeat", "replace", "replace1", "sub",
-		"pad", "lpad", "center", "concat", "prepend",
-		"startswith", "endswith", "contains", "match",
-		"isnum", "isalpha", "isalnum", "isspace", "isupper", "islower",
-		"split", "lines", "words", "chars", "join",
-		"first", "last", "nth", "slice", "push", "pop", "flatten",
-		"arr_sort", "arr_reverse", "arr_uniq", "arr_len", "arr_join",
-		"arr_contains", "arr_map", "arr_filter",
-		"arr_sum", "arr_min", "arr_max", "arr_avg",
-		"add", "mul", "div", "mod", "pow", "abs", "negate",
-		"ceil", "floor", "round", "sqrt", "hex", "oct", "bin",
-		"type", "tonum", "tostr", "toarray",
+		"alias", "unalias", "aliases", "which", "type",
+		"bc", "factor", "random",
+		"box", "history", "clear", "help", "man", "true", "false",
+		"exit", "quit", "source", "watch",
 	}
-
 	for _, b := range builtins {
 		if b == cmd {
 			return true
@@ -3126,7 +3061,7 @@ func builtinMan(sh *Shell, args []string) (*Result, bool, error) {
 	}
 	// Fallback: check if it's our built-in
 	if isBuiltin(cmd) {
-		return NewText(fmt.Sprintf("%s: Katsh built-in command. Use 'help' for full documentation.", cmd)), true, nil
+		return NewText(fmt.Sprintf("%s: StructSH built-in command. Use 'help' for full documentation.", cmd)), true, nil
 	}
 	return NewText(fmt.Sprintf("No manual entry for %s", cmd)), true, nil
 }
@@ -3135,27 +3070,14 @@ func builtinSource(sh *Shell, args []string) (*Result, bool, error) {
 	if len(args) == 0 {
 		return nil, true, fmt.Errorf("source: missing file argument")
 	}
-	p := resolvePath(sh.cwd, args[0])
-	data, err := os.ReadFile(p)
-	if err != nil {
-		return nil, true, fmt.Errorf("source: %w", err)
+	// Pass any extra args as positional parameters to the sourced file
+	scriptArgs := args[1:]
+	code := SourceFile(sh, args[0])
+	_ = scriptArgs
+	if code != 0 {
+		return nil, true, fmt.Errorf("source: %s exited with code %d", args[0], code)
 	}
-	lines := strings.Split(string(data), "\n")
-	var results []string
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		code := sh.execLine(line)
-		if code != 0 {
-			results = append(results, fmt.Sprintf("line error: %s", line))
-		}
-	}
-	if len(results) > 0 {
-		return NewText(strings.Join(results, "\n")), true, nil
-	}
-	return NewText(fmt.Sprintf("sourced %d lines from %s", len(lines), args[0])), true, nil
+	return NewText(fmt.Sprintf("sourced %s", args[0])), true, nil
 }
 
 func builtinWatch(sh *Shell, args []string) (*Result, bool, error) {
@@ -3197,7 +3119,7 @@ func builtinWatch(sh *Shell, args []string) (*Result, bool, error) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 func builtinHelp() (*Result, bool, error) {
-	help := "\n" + sectionHeader("Katsh — Structured Shell v0.3.0") + `
+	help := "\n" + sectionHeader("StructSH — Structured Shell v0.3.0") + `
   Every command output is a table. Chain transforms with | pipes.
   Store any result in the Box with #=.  Run scripts with import.
 
@@ -3510,7 +3432,7 @@ func builtinHelp() (*Result, bool, error) {
   watch [-n s] <cmd>  run command repeatedly
   clear               clear the screen
   help                this help text
-  exit / quit         leave Katsh
+  exit / quit         leave StructSH
 `
 	return NewText(help), true, nil
 }
@@ -3559,3 +3481,4 @@ func osUsername() (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+

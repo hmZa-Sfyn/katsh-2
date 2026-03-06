@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -52,10 +52,10 @@ func NewShell() *Shell {
 		cwd = "/"
 	}
 	sh := &Shell{
-		cwd:          cwd,
-		box:          NewBox(),
-		aliases:      make(map[string]Alias),
-		vars:         make(map[string]string),
+		cwd:     cwd,
+		box:     NewBox(),
+		aliases: make(map[string]Alias),
+		vars:    make(map[string]string),
 		funcs:        make(map[string]*UserFunc),
 		readonlyVars: make(map[string]bool),
 		arrays:       make(map[string]*ShArray),
@@ -255,19 +255,13 @@ func (sh *Shell) printResult(r *Result) {
 			items := splitArrayResult(text)
 			cols := []string{"index", "value"}
 			rows := make([]Row, len(items))
-			for i, it := range items {
-				rows[i] = Row{"index": strconv.Itoa(i), "value": it}
-			}
+			for i, it := range items { rows[i] = Row{"index": strconv.Itoa(i), "value": it} }
 			if sh.captureMode {
-				for _, it := range items {
-					sh.captureOut.WriteString(it + "\n")
-				}
+				for _, it := range items { sh.captureOut.WriteString(it + "\n") }
 				return
 			}
 			fmt.Println()
-			for _, line := range RenderTable(cols, rows) {
-				fmt.Println(line)
-			}
+			for _, line := range RenderTable(cols, rows) { fmt.Println(line) }
 			fmt.Println()
 			return
 		}
@@ -418,15 +412,15 @@ func historyPaths() (string, string) {
 	var tmpDir, permDir string
 
 	if runtime.GOOS == "windows" {
-		tmpDir = filepath.Join(os.Getenv("TEMP"), "Katsh")
-		permDir = filepath.Join(os.Getenv("APPDATA"), "Katsh")
+		tmpDir = filepath.Join(os.Getenv("TEMP"), "structsh")
+		permDir = filepath.Join(os.Getenv("APPDATA"), "structsh")
 	} else {
-		tmpDir = filepath.Join("/tmp", "Katsh")
+		tmpDir = filepath.Join("/tmp", "structsh")
 		home := os.Getenv("HOME")
 		if home == "" {
 			home = "/"
 		}
-		permDir = filepath.Join(home, ".config", "Katsh")
+		permDir = filepath.Join(home, ".config", "structsh")
 	}
 
 	_ = os.MkdirAll(tmpDir, 0755)
