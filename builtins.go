@@ -2784,22 +2784,91 @@ func builtinType(sh *Shell, args []string) (*Result, bool, error) {
 
 func isBuiltin(cmd string) bool {
 	builtins := []string{
-		"cd", "pwd", "pushd", "popd", "dirs", "ls", "ll", "la", "tree", "du", "df",
-		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
-		"wc", "stat", "file", "find", "diff", "grep", "sed", "awk", "cut", "tr",
-		"sort", "uniq", "tee", "split", "xargs", "chmod", "chown",
-		"ps", "kill", "sleep", "jobs", "uname", "uptime", "date", "cal",
-		"hostname", "whoami", "id", "groups", "w", "who",
-		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
+		// Navigation
+		"cd", "pwd", "pushd", "popd", "dirs",
+
+		// Listing
+		"ls", "ll", "la", "tree", "du", "df",
+
+		// File operations
+		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm",
+		"cp", "mv", "ln", "readlink", "realpath", "basename", "dirname",
+		"mktemp", "mkfifo",
+
+		// Inspection
+		"wc", "stat", "file", "find", "diff",
+
+		// Text processing (standalone form)
+		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "split",
+		"tee", "xargs", "nl", "fold", "expand", "unexpand", "column",
+		"paste", "comm", "shuf", "numfmt", "rev", "strings", "xxd", "od",
+
+		// Permissions
+		"chmod", "chown",
+
+		// Process management
+		"ps", "kill", "sleep", "jobs", "nice", "timeout", "pgrep", "pkill",
+		"nohup", "top", "lsof", "vmstat", "iostat",
+
+		// System info
+		"uname", "uptime", "date", "cal", "hostname", "whoami", "id",
+		"groups", "who", "w", "free", "lscpu", "lsusb", "lspci", "dmesg",
+		"lsblk", "mount", "umount", "blkid", "journalctl", "systemctl", "service",
+
+		// Network
+		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip", "ss",
+		"netstat", "traceroute", "mtr", "openssl", "ssh", "scp", "rsync",
+		"httpget", "httppost", "jq",
+
+		// Hashing
 		"md5sum", "sha1sum", "sha256sum", "md5", "sha1", "sha256",
+
+		// Archiving
 		"tar", "gzip", "gunzip", "zip", "unzip",
-		"echo", "printf", "yes", "seq", "base64", "rev",
-		"set", "unset", "vars", "export", "env", "printenv",
-		"alias", "unalias", "aliases", "which", "type",
+
+		// Text generation & math
+		"echo", "printf", "print", "println", "yes", "seq", "base64",
 		"bc", "factor", "random",
-		"box", "history", "clear", "help", "man", "true", "false",
-		"exit", "quit", "source", "watch",
+
+		// Variables & environment
+		"set", "unset", "vars", "export", "env", "printenv",
+
+		// Import / source
+		"import", "source", ".", // . is usually treated as source
+
+		// Scripting helpers
+		"eval", "exec", "test", "[", "]", "read", "mapfile", "declare",
+		"true", "false", "pass",
+
+		// Identification
+		"which", "type", "alias", "unalias", "aliases", "man",
+
+		// Box storage
+		"box",
+
+		// Session / misc
+		"history", "watch", "clear", "help", "exit", "quit",
+
+		// ── Pipe / table operators (most important for syntax highlighting) ──
+		"select", "where", "sort", "limit", "skip", "count", "unique",
+		"reverse", "fmt", "add", "rename",
+
+		// ── String / array / number methods (very commonly used after | ) ──
+		"upper", "lower", "title", "trim", "ltrim", "rtrim", "strip",
+		"len", "reverse", "repeat", "replace", "replace1", "sub",
+		"pad", "lpad", "center", "concat", "prepend",
+		"startswith", "endswith", "contains", "match",
+		"isnum", "isalpha", "isalnum", "isspace", "isupper", "islower",
+		"split", "lines", "words", "chars", "join",
+		"first", "last", "nth", "slice", "push", "pop", "flatten",
+		"arr_sort", "arr_reverse", "arr_uniq", "arr_len", "arr_join",
+		"arr_contains", "arr_map", "arr_filter",
+		"arr_sum", "arr_min", "arr_max", "arr_avg",
+		"add", "mul", "div", "mod", "pow", "abs", "negate",
+		"ceil", "floor", "round", "sqrt", "hex", "oct", "bin",
+		"type", "tonum", "tostr", "toarray",
 	}
+
 	for _, b := range builtins {
 		if b == cmd {
 			return true
