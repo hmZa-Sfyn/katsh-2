@@ -9,6 +9,28 @@ import (
 	"golang.org/x/term"
 )
 
+// isPasteStart returns true when b starts with the bracketed-paste-start sequence
+// ESC [ 2 0 0 ~  (6 bytes: 0x1b 0x5b 0x32 0x30 0x30 0x7e)
+func isPasteStart(b []byte) bool {
+	return len(b) >= 6 &&
+		b[0] == 0x1b && b[1] == '[' &&
+		b[2] == '2' && b[3] == '0' && b[4] == '0' && b[5] == '~'
+}
+
+// findPasteEnd returns the index in buf where ESC[201~ begins, or -1 if not found.
+func findPasteEnd(buf []byte) int {
+	end := []byte{0x1b, '[', '2', '0', '1', '~'}
+	for i := 0; i <= len(buf)-6; i++ {
+		match := true
+		for j := 0; j < 6; j++ {
+			if buf[i+j] != end[j] { match = false; break }
+		}
+		if match { return i }
+	}
+	return -1
+}
+
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Readline — full raw-mode line editor
 //
@@ -23,6 +45,7 @@ import (
 //   • Ctrl-C    cancel line
 //   • Ctrl-D    EOF / exit when line empty
 //   • Tab       completion (commands, paths, $vars, box keys)
+//   • Paste     bracketed paste (Shift+Ctrl+V / middle-click / right-click paste)
 //   • Live syntax highlighting while you type
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -39,12 +62,27 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 	}
 	defer term.Restore(fd, oldState)
 
+	// Enable bracketed paste mode: terminal wraps pastes in ESC[200~ ... ESC[201~
+	// This prevents pasted text being interpreted as keystrokes.
+	fmt.Print("\x1b[?2004h")
+	defer fmt.Print("\x1b[?2004l") // disable on exit
+
 	fmt.Print(prompt)
 
-	var buf []rune
-	cursor := 0
-	histIdx := -1
-	savedLine := ""
+	var buf     []rune
+	cursor      := 0
+	histIdx     := -1
+	savedLine   := ""
+
+	// insertRunes inserts a slice of runes at cursor position.
+	insertRunes := func(runes []rune) {
+		newBuf := make([]rune, len(buf)+len(runes))
+		copy(newBuf, buf[:cursor])
+		copy(newBuf[cursor:], runes)
+		copy(newBuf[cursor+len(runes):], buf[cursor:])
+		buf = newBuf
+		cursor += len(runes)
+	}
 
 	// Redraw current line with syntax highlighting
 	redraw := func() {
@@ -57,22 +95,63 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 		fmt.Printf("\r\033[%dC", col)
 	}
 
+
 	for {
-		raw := make([]byte, 16)
+		raw := make([]byte, 256)
 		n, err := os.Stdin.Read(raw)
 		if err != nil || n == 0 {
 			return string(buf), true
 		}
 		b := raw[:n]
 
-		// ── Escape / CSI sequences ───────────────
+		// ── Bracketed paste: ESC [ 2 0 0 ~ ──────────────────────────────────
+		// Modern terminals send  \x1b[200~<text>\x1b[201~  when you paste.
+		if isPasteStart(b) {
+			// Accumulate everything until we see the closing ESC[201~
+			var pasteBuf []byte
+			// The payload may already be partly in b after the 6-byte header
+			after := b[6:] // bytes after \x1b[200~
+			pasteBuf = append(pasteBuf, after...)
+			for {
+				if pasteEnd := findPasteEnd(pasteBuf); pasteEnd >= 0 {
+					pasteBuf = pasteBuf[:pasteEnd]
+					break
+				}
+				chunk := make([]byte, 512)
+				nr, er := os.Stdin.Read(chunk)
+				if er != nil || nr == 0 { break }
+				pasteBuf = append(pasteBuf, chunk[:nr]...)
+			}
+			// Convert to runes, replacing \r/\n with space (single-line paste)
+			// but preserving the full text including newlines for multi-line
+			text := string(pasteBuf)
+			// Replace \r\n and bare \r with \n for consistency
+			text = strings.ReplaceAll(text, "\r\n", "\n")
+			text = strings.ReplaceAll(text, "\r", "\n")
+			// For single-line input: replace newlines with spaces so the
+			// whole paste lands on one line. Multi-line pastes execute each line.
+			lines := strings.Split(text, "\n")
+			if len(lines) == 1 {
+				insertRunes([]rune(lines[0]))
+				redraw()
+			} else {
+				// Multi-line paste: complete first line immediately, then
+				// re-queue remaining lines (execute them in sequence).
+				firstLine := string(buf[:cursor]) + lines[0] + string(buf[cursor:])
+				fmt.Print("\r\n")
+				term.Restore(fd, oldState)
+				fmt.Print("\x1b[?2004l")
+				return firstLine, false
+			}
+			continue
+		}
+
+		// ── Escape / CSI sequences ───────────────────────────────────────────
 		if b[0] == 0x1b {
 			if n >= 3 && b[1] == '[' {
 				switch b[2] {
 				case 'A': // ↑ up — history prev
-					if len(sh.history) == 0 {
-						continue
-					}
+					if len(sh.history) == 0 { continue }
 					if histIdx == -1 {
 						savedLine = string(buf)
 						histIdx = len(sh.history) - 1
@@ -84,9 +163,7 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					redraw()
 
 				case 'B': // ↓ down — history next
-					if histIdx == -1 {
-						continue
-					}
+					if histIdx == -1 { continue }
 					if histIdx < len(sh.history)-1 {
 						histIdx++
 						buf = []rune(sh.history[histIdx].Raw)
@@ -98,24 +175,16 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					redraw()
 
 				case 'C': // → right
-					if cursor < len(buf) {
-						cursor++
-						redraw()
-					}
+					if cursor < len(buf) { cursor++; redraw() }
 
 				case 'D': // ← left
-					if cursor > 0 {
-						cursor--
-						redraw()
-					}
+					if cursor > 0 { cursor--; redraw() }
 
 				case 'H': // Home
-					cursor = 0
-					redraw()
+					cursor = 0; redraw()
 
 				case 'F': // End
-					cursor = len(buf)
-					redraw()
+					cursor = len(buf); redraw()
 
 				case '3': // Delete key (ESC [ 3 ~)
 					if n >= 4 && b[3] == '~' && cursor < len(buf) {
@@ -124,21 +193,15 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					}
 
 				case '1': // ESC [ 1 ~ = Home
-					if n >= 4 && b[3] == '~' {
-						cursor = 0
-						redraw()
-					}
+					if n >= 4 && b[3] == '~' { cursor = 0; redraw() }
 				case '4': // ESC [ 4 ~ = End
-					if n >= 4 && b[3] == '~' {
-						cursor = len(buf)
-						redraw()
-					}
+					if n >= 4 && b[3] == '~' { cursor = len(buf); redraw() }
 				}
 			}
 			continue
 		}
 
-		// ── Control characters ───────────────────
+		// ── Control characters ───────────────────────────────────────────────
 		switch b[0] {
 		case 0x0d, 0x0a: // Enter
 			fmt.Print("\r\n")
@@ -152,30 +215,21 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 			}
 
 		case 0x01: // Ctrl-A — home
-			cursor = 0
-			redraw()
+			cursor = 0; redraw()
 
 		case 0x05: // Ctrl-E — end
-			cursor = len(buf)
-			redraw()
+			cursor = len(buf); redraw()
 
 		case 0x0b: // Ctrl-K — kill to end
-			buf = buf[:cursor]
-			redraw()
+			buf = buf[:cursor]; redraw()
 
 		case 0x15: // Ctrl-U — kill whole line
-			buf = buf[:0]
-			cursor = 0
-			redraw()
+			buf = buf[:0]; cursor = 0; redraw()
 
 		case 0x17: // Ctrl-W — delete prev word
 			end := cursor
-			for cursor > 0 && buf[cursor-1] == ' ' {
-				cursor--
-			}
-			for cursor > 0 && buf[cursor-1] != ' ' {
-				cursor--
-			}
+			for cursor > 0 && buf[cursor-1] == ' ' { cursor-- }
+			for cursor > 0 && buf[cursor-1] != ' ' { cursor-- }
 			buf = append(buf[:cursor], buf[end:]...)
 			redraw()
 
@@ -194,9 +248,7 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 
 		case 0x03: // Ctrl-C — cancel line
 			fmt.Print("^C\r\n")
-			buf = buf[:0]
-			cursor = 0
-			histIdx = -1
+			buf = buf[:0]; cursor = 0; histIdx = -1
 			fmt.Print(prompt)
 
 		case 0x09: // Tab — completion
@@ -220,9 +272,7 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 				fmt.Print("\r\n")
 				for i, o := range opts {
 					fmt.Printf("  %s%s%s", ansiCyan, o, ansiReset)
-					if i < len(opts)-1 {
-						fmt.Print("  ")
-					}
+					if i < len(opts)-1 { fmt.Print("  ") }
 				}
 				fmt.Print("\r\n")
 				fmt.Print(prompt)
@@ -232,15 +282,10 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 			}
 
 		default:
-			// Printable / multibyte UTF-8
+			// Printable / multibyte UTF-8 — insert at cursor
 			ch, size := utf8.DecodeRune(b[:n])
 			if ch != utf8.RuneError || size > 1 {
-				newBuf := make([]rune, len(buf)+1)
-				copy(newBuf, buf[:cursor])
-				newBuf[cursor] = ch
-				copy(newBuf[cursor+1:], buf[cursor:])
-				buf = newBuf
-				cursor++
+				insertRunes([]rune{ch})
 				redraw()
 			}
 		}
@@ -352,14 +397,10 @@ func spanize(s string) []span {
 	prevWasPipe := false
 
 	flush := func(isSpace bool) {
-		if cur.Len() == 0 {
-			return
-		}
+		if cur.Len() == 0 { return }
 		t := cur.String()
 		spans = append(spans, span{text: t, space: isSpace, afterPipe: prevWasPipe && !isSpace})
-		if !isSpace {
-			prevWasPipe = (t == "|")
-		}
+		if !isSpace { prevWasPipe = (t == "|") }
 		cur.Reset()
 	}
 
@@ -367,16 +408,10 @@ func spanize(s string) []span {
 		switch {
 		case inBacktick:
 			cur.WriteRune(ch)
-			if ch == '`' {
-				inBacktick = false
-				flush(false)
-			}
+			if ch == '`' { inBacktick = false; flush(false) }
 		case inQuote:
 			cur.WriteRune(ch)
-			if ch == quoteChar {
-				inQuote = false
-				flush(false)
-			}
+			if ch == quoteChar { inQuote = false; flush(false) }
 		case ch == '`':
 			flush(false)
 			inBacktick = true
@@ -424,24 +459,12 @@ func isSyntaxOp(t string) bool {
 }
 
 func isNumericStr(t string) bool {
-	if t == "" {
-		return false
-	}
+	if t == "" { return false }
 	dot := false
 	for i, ch := range t {
-		if i == 0 && (ch == '-' || ch == '+') {
-			continue
-		}
-		if ch == '.' {
-			if dot {
-				return false
-			}
-			dot = true
-			continue
-		}
-		if ch < '0' || ch > '9' {
-			return false
-		}
+		if i == 0 && (ch == '-' || ch == '+') { continue }
+		if ch == '.' { if dot { return false }; dot = true; continue }
+		if ch < '0' || ch > '9' { return false }
 	}
 	return true
 }
@@ -452,29 +475,23 @@ func isNumericStr(t string) bool {
 
 func (sh *Shell) completionOptions(line string, cursor int) []string {
 	prefix := line[:cursor]
-	word := lastWord(prefix)
-	toks := strings.Fields(prefix)
-	isCmd := len(toks) == 0 || (len(toks) == 1 && !strings.HasSuffix(prefix, " "))
+	word   := lastWord(prefix)
+	toks   := strings.Fields(prefix)
+	isCmd  := len(toks) == 0 || (len(toks) == 1 && !strings.HasSuffix(prefix, " "))
 
 	var opts []string
 
 	if isCmd {
 		for _, b := range allBuiltinNames() {
-			if strings.HasPrefix(b, word) {
-				opts = append(opts, b)
-			}
+			if strings.HasPrefix(b, word) { opts = append(opts, b) }
 		}
 		for name := range sh.aliases {
-			if strings.HasPrefix(name, word) {
-				opts = append(opts, name)
-			}
+			if strings.HasPrefix(name, word) { opts = append(opts, name) }
 		}
 	} else if strings.HasPrefix(word, "$") {
 		pfx := word[1:]
 		for k := range sh.vars {
-			if strings.HasPrefix(k, pfx) {
-				opts = append(opts, "$"+k)
-			}
+			if strings.HasPrefix(k, pfx) { opts = append(opts, "$"+k) }
 		}
 	} else {
 		// Path completion
@@ -490,9 +507,7 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 				name := e.Name()
 				if strings.HasPrefix(name, filePfx) {
 					pfxBase := word[:len(word)-len(filePfx)]
-					if e.IsDir() {
-						name += "/"
-					}
+					if e.IsDir() { name += "/" }
 					opts = append(opts, pfxBase+name)
 				}
 			}
@@ -500,9 +515,7 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 		// Box key completion after "box get/rm/rename/tag"
 		if len(toks) >= 2 && toks[0] == "box" {
 			for _, k := range sh.box.Keys() {
-				if strings.HasPrefix(k, word) {
-					opts = append(opts, k)
-				}
+				if strings.HasPrefix(k, word) { opts = append(opts, k) }
 			}
 		}
 	}
@@ -510,75 +523,71 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 }
 
 func lastWord(s string) string {
-	if strings.HasSuffix(s, " ") {
-		return ""
-	}
+	if strings.HasSuffix(s, " ") { return "" }
 	parts := strings.Fields(s)
-	if len(parts) == 0 {
-		return ""
-	}
+	if len(parts) == 0 { return "" }
 	return parts[len(parts)-1]
 }
 
 func allBuiltinNames() []string {
 	return []string{
 		// Navigation
-		"cd", "pwd", "pushd", "popd", "dirs",
+		"cd","pwd","pushd","popd","dirs",
 		// Listing
-		"ls", "ll", "la", "tree", "du", "df",
+		"ls","ll","la","tree","du","df",
 		// File operations
-		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
-		"readlink", "realpath", "basename", "dirname", "mktemp", "mkfifo",
+		"cat","head","tail","touch","mkdir","rmdir","rm","cp","mv","ln",
+		"readlink","realpath","basename","dirname","mktemp","mkfifo",
 		// Inspection
-		"wc", "stat", "file", "find", "diff",
+		"wc","stat","file","find","diff",
 		// Text processing
-		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "tee", "split", "xargs",
-		"nl", "fold", "expand", "unexpand", "column", "paste", "comm", "shuf",
-		"numfmt", "rev", "strings", "xxd", "od",
+		"grep","sed","awk","cut","tr","sort","uniq","tee","split","xargs",
+		"nl","fold","expand","unexpand","column","paste","comm","shuf",
+		"numfmt","rev","strings","xxd","od",
 		// Permissions
-		"chmod", "chown",
+		"chmod","chown",
 		// Process management
-		"ps", "kill", "sleep", "jobs", "nice", "timeout", "pgrep", "pkill", "nohup",
-		"top", "lsof", "vmstat", "iostat",
+		"ps","kill","sleep","jobs","nice","timeout","pgrep","pkill","nohup",
+		"top","lsof","vmstat","iostat",
 		// System info
-		"uname", "uptime", "date", "cal", "hostname", "whoami", "id", "groups", "who", "w",
-		"free", "lscpu", "lsusb", "lspci", "dmesg", "lsblk", "mount", "umount", "blkid",
-		"journalctl", "systemctl", "service",
+		"uname","uptime","date","cal","hostname","whoami","id","groups","who","w",
+		"free","lscpu","lsusb","lspci","dmesg","lsblk","mount","umount","blkid",
+		"journalctl","systemctl","service",
 		// Networking
-		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
-		"ss", "netstat", "traceroute", "mtr", "openssl", "ssh", "scp", "rsync",
-		"httpget", "httppost", "jq",
+		"ping","curl","wget","nslookup","dig","ifconfig","ip",
+		"ss","netstat","traceroute","mtr","openssl","ssh","scp","rsync",
+		"httpget","httppost","jq",
 		// Hashing / archives
-		"md5sum", "sha1sum", "sha256sum", "md5", "sha1", "sha256",
-		"tar", "gzip", "gunzip", "zip", "unzip",
+		"md5sum","sha1sum","sha256sum","md5","sha1","sha256",
+		"tar","gzip","gunzip","zip","unzip",
 		// Text generation
-		"echo", "printf", "yes", "seq", "base64", "bc", "factor", "random",
+		"echo","printf","yes","seq","base64","bc","factor","random",
 		// Variables / env
-		"set", "unset", "vars", "export", "import", "env", "printenv",
+		"set","unset","vars","export","import","env","printenv",
 		// Identification
-		"alias", "unalias", "aliases", "which", "type",
+		"alias","unalias","aliases","which","type",
 		// Scripting helpers
-		"eval", "exec", "test", "read", "mapfile", "readarray", "declare", "source",
-		"true", "false", "pass",
+		"eval","exec","test","read","mapfile","readarray","declare","source",
+		"true","false","pass",
 		// Session
-		"box", "history", "clear", "help", "man", "watch", "exit", "quit",
+		"box","history","clear","help","man","watch","exit","quit",
 		// Fun
-		"figlet", "matrix", "lolcat", "drawbox", "notify",
+		"figlet","matrix","lolcat","drawbox","notify",
 		// Scripting control flow (also keywords, shown green when first token)
-		"if", "for", "while", "func", "print", "println", "return",
-		"match", "unless", "try", "repeat", "do",
+		"if","for","while","func","print","println","return",
+		"match","unless","try","repeat","do",
 		// String / array / number ops (pipe operators and standalone commands)
-		"upper", "lower", "title", "trim", "ltrim", "rtrim", "strip",
-		"len", "reverse", "repeat", "replace", "replace1", "sub", "pad", "lpad", "center",
-		"startswith", "endswith", "contains", "match", "isnum", "isalpha", "isalnum",
-		"isspace", "isupper", "islower",
-		"lines", "words", "chars", "join", "concat", "prepend",
-		"first", "last", "nth", "slice", "push", "pop", "flatten",
-		"arr_uniq", "arr_sort", "arr_reverse", "arr_len", "arr_join",
-		"arr_contains", "arr_map", "arr_filter", "arr_sum", "arr_min", "arr_max", "arr_avg",
-		"add", "mul", "div", "mod", "pow",
-		"abs", "ceil", "floor", "round", "sqrt", "negate", "hex", "oct", "bin",
-		"tonum", "tostr", "toarray",
+		"upper","lower","title","trim","ltrim","rtrim","strip",
+		"len","reverse","repeat","replace","replace1","sub","pad","lpad","center",
+		"startswith","endswith","contains","match","isnum","isalpha","isalnum",
+		"isspace","isupper","islower",
+		"lines","words","chars","join","concat","prepend",
+		"first","last","nth","slice","push","pop","flatten",
+		"arr_uniq","arr_sort","arr_reverse","arr_len","arr_join",
+		"arr_contains","arr_map","arr_filter","arr_sum","arr_min","arr_max","arr_avg",
+		"add","mul","div","mod","pow",
+		"abs","ceil","floor","round","sqrt","negate","hex","oct","bin",
+		"tonum","tostr","toarray",
 	}
 }
 
@@ -591,16 +600,8 @@ func visibleLen(s string) int {
 	n := 0
 	esc := false
 	for _, ch := range s {
-		if esc {
-			if ch == 'm' {
-				esc = false
-			}
-			continue
-		}
-		if ch == '\033' {
-			esc = true
-			continue
-		}
+		if esc { if ch == 'm' { esc = false }; continue }
+		if ch == '\033' { esc = true; continue }
 		n++
 	}
 	return n
