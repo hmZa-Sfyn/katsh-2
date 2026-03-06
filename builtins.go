@@ -3331,6 +3331,76 @@ func builtinHelp() (*Result, bool, error) {
   cmd1 && cmd2  /  cmd1 || cmd2
   ` + "`cmd`" + `  subshell capture (in any position)
 
+` + c(ansiBold+ansiCyan, "  ── STRING / ARRAY / NUMBER OPS ────────────────────────────") + `
+  Works as both pipe operators and standalone commands:
+    "hello" | upper          →  HELLO
+    upper "hello"            →  HELLO
+    42 | upper               →  TypeError: expects string, got number
+
+  String manipulation
+    upper / lower / title    change case
+    trim / ltrim / rtrim     strip whitespace
+    strip [chars]            strip specific chars from both ends
+    len                      character count
+    reverse                  reverse characters
+    repeat <N>               repeat string N times
+    replace <old> <new>      replace all occurrences
+    replace1 <old> <new>     replace first occurrence
+    sub <start> [end]        substring by index (negative ok)
+    pad <width> [char]       right-pad to width
+    lpad <width> [char]      left-pad to width
+    center <width> [char]    center-pad to width
+    concat <str>             append to end
+    prepend <str>            prepend to start
+
+  String tests  (return "true" or "false")
+    startswith <prefix>      starts with prefix?
+    endswith <suffix>        ends with suffix?
+    contains <substr>        contains substring?
+    match <regex>            full regex match?
+    isnum                    is numeric?
+    isalpha                  all letters?
+    isalnum                  letters or digits?
+    isspace                  all whitespace?
+    isupper / islower        all uppercase / lowercase?
+
+  Split / join
+    split [sep]              split on sep (default " ") → array
+    lines                    split on newlines → array
+    words                    split on whitespace → array
+    chars                    split into individual characters → array
+    join [sep]               join array items with sep
+
+  Array operations  (input must be array, e.g. after split)
+    first / last             first or last element
+    nth <N>                  Nth element (0-based, negative ok)
+    slice <start> [end]      sub-array
+    push <val>               append element
+    pop                      remove last element
+    flatten                  flatten nested newlines
+    arr_sort                 sort elements
+    arr_reverse              reverse element order
+    arr_uniq                 remove duplicates
+    arr_len                  element count
+    arr_join [sep]           join into string
+    arr_contains <val>       membership test → "true"/"false"
+    arr_map <expr>           transform each element  ($it = current)
+    arr_filter <expr>        keep elements where expr is true
+    arr_sum / arr_min / arr_max / arr_avg   numeric aggregates
+
+  Number operations  (input must be a number)
+    add <N>  /  mul <N>      +  /  *
+    div <N>  /  mod <N>      /  /  %
+    pow <N>                  exponentiation
+    abs / negate             |n|  /  -n
+    ceil / floor / round [N] rounding
+    sqrt                     square root
+    hex / oct / bin          convert to hex / octal / binary string
+
+  Type utilities
+    type                     show kind: string | number | array | text
+    tonum / tostr / toarray  convert between types
+
 ` + c(ansiBold+ansiCyan, "  ── PIPE OPERATORS ─────────────────────────────────────────") + `
   | select col1,col2      keep columns
   | where col=val         filter rows  (= != > < >= <= ~)
