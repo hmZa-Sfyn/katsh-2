@@ -35,6 +35,11 @@ func (sh *Shell) evalScript(raw string) (bool, int) {
 		return true, 0
 	}
 
+	// ── New features (scripting2.go) ──────────────────────────────────────
+	if handled, code := sh.evalScript2(raw); handled {
+		return true, code
+	}
+
 	lp := 20
 	if len(raw) < lp { lp = len(raw) }
 	lower := strings.ToLower(raw[:lp])
@@ -740,12 +745,14 @@ func (sh *Shell) callUserFunc(fn *UserFunc, args []string, src string) int {
 	}
 	if len(args)>len(fn.Params) { sh.vars["_args"]=strings.Join(args[len(fn.Params):]," ") }
 	sh.vars["_argc"] = strconv.Itoa(len(args))
-	code := 0
-	for _, line := range fn.Body {
-		line=strings.TrimSpace(line); if line==""{continue}
-		code=sh.execLine(line)
-		if code==codeReturn{code=0;break}
-	}
+	sh.vars["_return"] = ""
+	outerDefer := sh.deferStack
+	sh.deferStack = nil
+	body := strings.Join(fn.Body, "\n")
+	code := sh.execBodyLinesWithGoto(body)
+	if code == codeReturn { code = 0 }
+	for i := len(sh.deferStack)-1; i >= 0; i-- { sh.execLine(sh.deferStack[i]) }
+	sh.deferStack = outerDefer
 	for p,v := range saved { sh.vars[p]=v }
 	return code
 }

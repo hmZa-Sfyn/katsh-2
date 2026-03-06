@@ -39,6 +39,7 @@ type Shell struct {
 	arrays          map[string]*ShArray
 	errHandlerDepth int
 	lastErrMsg      string
+	deferStack      []string // deferred commands (LIFO)
 
 	// Output capture (for backtick subshells)
 	captureMode bool
