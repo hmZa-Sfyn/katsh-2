@@ -269,13 +269,17 @@ func handleBuiltin(sh *Shell, command string, args []string) (*Result, bool, err
 		if len(args) == 0 {
 			// No args → launch interactive shell session
 			code := RunPassthrough("", "", sh.cwd)
-			if code != 0 { return nil, true, fmt.Errorf("shell exited %d", code) }
+			if code != 0 {
+				return nil, true, fmt.Errorf("shell exited %d", code)
+			}
 			return NewText(""), true, nil
 		}
 		cmdStr := sh.shellExpand(strings.Join(args, " "))
 		cmdStr = stripOuterQuotes(cmdStr)
 		code := RunPassthrough("", cmdStr, sh.cwd)
-		if code != 0 { return nil, true, fmt.Errorf("shell exited %d", code) }
+		if code != 0 {
+			return nil, true, fmt.Errorf("shell exited %d", code)
+		}
 		return NewText(""), true, nil
 
 	// `capture varname cmd args...` — run cmd in shell, store stdout in var
@@ -3329,7 +3333,7 @@ func builtinHelp() (*Result, bool, error) {
 
   ` + c(ansiBold, "Capture output into a variable:") + `
     x = $(git rev-parse HEAD)        POSIX $() — works in any expression
-    x = \`git branch --show-current\`  backtick — same thing
+    x = ` + "`git branch --show-curren`" + `  backtick — same thing
     capture x git log --oneline | head -5
     msg = "on branch $(git branch --show-current)"
 
@@ -3540,4 +3544,3 @@ func osUsername() (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
-
