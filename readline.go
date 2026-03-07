@@ -644,102 +644,108 @@ func lastWord(s string) string {
 
 func allBuiltinNames() []string {
 	return []string{
-		"select", "where", "bash!", "zsh!", "sh!", "!zsh", "!bash", "!sh", "skip", "limit", "rename", "count",
-		// ── Navigation ──────────────────────────────────────────────────────
+		// Navigation
 		"cd", "pwd", "pushd", "popd", "dirs",
-		// ── Listing ─────────────────────────────────────────────────────────
+
+		// Listing
 		"ls", "ll", "la", "tree", "du", "df",
-		// ── File operations ─────────────────────────────────────────────────
-		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
-		"readlink", "realpath", "basename", "dirname", "mktemp", "mkfifo",
-		// ── Inspection ───────────────────────────────────────────────────────
+
+		// File operations
+		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm",
+		"cp", "mv", "ln", "readlink", "realpath", "basename",
+		"dirname", "mktemp", "mkfifo",
+
+		// Inspection
 		"wc", "stat", "file", "find", "diff",
-		// ── Text processing ──────────────────────────────────────────────────
-		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "tee", "split", "xargs",
-		"nl", "fold", "expand", "unexpand", "column", "paste", "join", "comm", "shuf",
-		"numfmt", "rev", "strings", "xxd", "od",
-		// ── Permissions ──────────────────────────────────────────────────────
+
+		// Text processing (standalone & pipe-friendly)
+		"grep", "sed", "awk", "cut", "tr", "sort", "uniq",
+		"split", "tee", "xargs", "nl", "fold", "expand", "unexpand",
+		"column", "paste", "comm", "shuf", "numfmt", "rev",
+		"strings", "xxd", "od",
+
+		// Permissions
 		"chmod", "chown",
-		// ── Process management ───────────────────────────────────────────────
-		"ps", "kill", "sleep", "jobs", "nice", "timeout", "pgrep", "pkill", "nohup",
-		"bg", "fg", "top", "lsof", "vmstat", "iostat",
-		// ── System info ──────────────────────────────────────────────────────
-		"uname", "uptime", "date", "cal", "hostname", "whoami", "id", "groups", "who", "w",
-		"free", "lscpu", "lsusb", "lspci", "dmesg", "lsblk", "mount", "umount",
-		"fdisk", "blkid", "journalctl", "systemctl", "service",
-		// ── Networking ───────────────────────────────────────────────────────
-		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
-		"ss", "netstat", "traceroute", "tracert", "mtr", "openssl",
+
+		// Process management
+		"ps", "kill", "sleep", "jobs", "nice", "timeout", "pgrep",
+		"pkill", "nohup", "top", "lsof", "vmstat", "iostat",
+
+		// System info
+		"uname", "uptime", "date", "cal", "hostname", "whoami",
+		"id", "groups", "who", "w", "free", "lscpu", "lsusb",
+		"lspci", "dmesg", "lsblk", "mount", "umount", "blkid",
+		"journalctl", "systemctl", "service",
+
+		// Network
+		"ping", "curl", "wget", "nslookup", "dig", "ifconfig",
+		"ip", "ss", "netstat", "traceroute", "mtr", "openssl",
 		"ssh", "scp", "rsync", "httpget", "httppost", "jq",
-		// ── Hashing / archives ───────────────────────────────────────────────
+
+		// Hashing
 		"md5sum", "md5", "sha1sum", "sha1", "sha256sum", "sha256",
+
+		// Archiving
 		"tar", "gzip", "gunzip", "zip", "unzip",
-		// ── Text generation / math ───────────────────────────────────────────
-		"echo", "printf", "yes", "seq", "base64", "bc", "factor", "random",
-		// ── Variables / env ──────────────────────────────────────────────────
-		"set", "unset", "vars", "export", "import", "env", "printenv",
-		"readonly", "declare", "typeset", "getopts",
-		// ── Identification ────────────────────────────────────────────────────
-		"alias", "unalias", "aliases", "which", "type",
-		// ── Scripting helpers ─────────────────────────────────────────────────
-		"eval", "exec", "test", "[", "read", "mapfile", "readarray", "source", ".",
-		"true", "false", "pass", "local", "break", "continue", "return",
-		// ── Shell passthrough ─────────────────────────────────────────────────
-		"run", "shell", "capture", "bash", "zsh", "sh", "fish", "ksh", "dash",
-		// ── Session ───────────────────────────────────────────────────────────
-		"box", "history", "clear", "help", "man", "watch", "exit", "quit",
-		// ── Fun / visual ──────────────────────────────────────────────────────
-		"figlet", "toilet", "lolcat", "banner2", "drawbox", "notify",
-		// ── Scripting keywords ────────────────────────────────────────────────
-		"if", "elif", "else", "fi",
-		"for", "while", "do", "done", "until",
-		"in", "range",
-		"func", "return",
-		"match", "case", "default", "switch", "fallthrough",
-		"unless", "when",
-		"try", "catch", "finally", "throw", "raise",
-		"repeat",
-		"enum", "struct",
-		"defer", "with",
-		"goto", "label",
-		"and", "or", "not",
-		"null", "nil",
-		"print", "println",
-		// ── String operations (pipe ops + standalone) ──────────────────────
-		"upper", "lower", "title",
-		"trim", "ltrim", "rtrim", "strip",
-		"len", "reverse", "replace", "replace1",
-		"sub", "sub_n", "pad", "lpad", "center",
-		"startswith", "endswith", "contains",
-		"isnum", "isalpha", "isalnum", "isspace", "isupper", "islower",
-		"lines", "words", "chars", "concat", "prepend",
-		// ── Array operations ──────────────────────────────────────────────────
+
+		// Text generation & math
+		"echo", "printf", "print", "println", "yes", "seq",
+		"base64", "bc", "factor", "random",
+
+		// Variables & environment
+		"set", "unset", "vars", "export", "env", "printenv",
+
+		// Import / source
+		"import", "source", ".",
+
+		// Shell passthrough & capture
+		"bash!", "zsh!", "sh!", "!", "bash", "zsh", "run",
+		"capture",
+
+		// Scripting helpers
+		"eval", "exec", "test", "[", "read", "mapfile", "declare",
+		"true", "false", "pass",
+
+		// Identification
+		"which", "type", "alias", "unalias", "aliases", "man",
+
+		// Core language keywords / flow control
+		"if", "elif", "else", "unless", "match", "case", "default",
+		"for", "while", "do", "until", "repeat", "try", "catch",
+		"finally", "func", "return", "&&", "||",
+
+		// Assignment & increment operators (as tokens)
+		"++", "--", "+=", "-=", "*=", "/=", "%=", "**=",
+
+		// Pipe / table operators
+		"select", "where", "grep", "sort", "limit", "skip", "count",
+		"unique", "reverse", "fmt", "add", "rename",
+
+		// String / array / number operators (used as commands / pipes)
+		"upper", "lower", "title", "trim", "ltrim", "rtrim", "strip",
+		"len", "reverse", "repeat", "replace", "replace1", "sub",
+		"pad", "lpad", "center", "concat", "prepend",
+		"startswith", "endswith", "contains", "match", "isnum",
+		"isalpha", "isalnum", "isspace", "isupper", "islower",
+		"split", "lines", "words", "chars", "join",
 		"first", "last", "nth", "slice", "push", "pop", "flatten",
-		"arr_uniq", "arr_sort", "arr_reverse", "arr_len", "arr_join",
+		"arr_sort", "arr_reverse", "arr_uniq", "arr_len", "arr_join",
 		"arr_contains", "arr_map", "arr_filter",
 		"arr_sum", "arr_min", "arr_max", "arr_avg",
-		// ── Number operations ─────────────────────────────────────────────────
-		"add", "mul", "div", "mod", "pow",
-		"abs", "ceil", "floor", "round", "sqrt", "negate",
-		"hex", "oct", "bin",
-		"tonum", "tostr", "toarray",
-		// ── Type inspection ───────────────────────────────────────────────────
-		"typeof", "dt_show",
-		// ── Map commands ──────────────────────────────────────────────────────
-		"map_new", "map_set", "map_get", "map_del", "map_has",
-		"map_keys", "map_values", "map_len", "map_show", "map_merge",
-		// ── Set commands ──────────────────────────────────────────────────────
-		"set_new", "set_add", "set_remove", "set_has",
-		"set_union", "set_intersect", "set_diff", "set_show", "set_len",
-		// ── Stack commands ────────────────────────────────────────────────────
-		"stack_new", "stack_push", "stack_pop", "stack_peek", "stack_len", "stack_show",
-		// ── Queue commands ────────────────────────────────────────────────────
-		"queue_new", "enqueue", "dequeue", "queue_peek", "queue_len", "queue_show",
-		// ── Tuple commands ────────────────────────────────────────────────────
-		"tuple_get", "tuple_len", "tuple_show",
-		// ── Matrix commands ───────────────────────────────────────────────────
-		"matrix_new", "matrix_get", "matrix_set", "matrix_add", "matrix_mul",
-		"matrix_transpose", "matrix_det", "matrix_show", "matrix_identity",
+		"add", "mul", "div", "mod", "pow", "abs", "negate",
+		"ceil", "floor", "round", "sqrt", "hex", "oct", "bin",
+		"type", "tonum", "tostr", "toarray",
+
+		// Box storage
+		"box", "get", "rm", "rename", "tag", "untag", "search",
+		"export", "import", "clear",
+
+		// Fun & session
+		"figlet", "matrix", "lolcat", "drawbox", "notify",
+		"history", "watch", "clear", "help", "exit", "quit",
+
+		// Special syntax / sigils (not real commands but parsed specially)
+		// "#=", "$", "`", "$(", ")", "[", "]", "{", "}"
 	}
 }
 
