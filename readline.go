@@ -644,6 +644,7 @@ func lastWord(s string) string {
 
 func allBuiltinNames() []string {
 	return []string{
+		"select", "where", "bash!", "zsh!", "sh!", "!",
 		// ── Navigation ──────────────────────────────────────────────────────
 		"cd", "pwd", "pushd", "popd", "dirs",
 		// ── Listing ─────────────────────────────────────────────────────────

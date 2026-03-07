@@ -2829,77 +2829,6 @@ var knownCmds = func() map[string]bool {
 		m[n] = true
 	}
 
-	// ── builtins.go command cases ─────────────────────────────────────────
-	for _, n := range []string{
-		"cd", "pwd", "pushd", "popd", "dirs",
-		"ls", "ll", "la", "tree", "du", "df",
-		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
-		"wc", "stat", "file", "find", "diff",
-		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "tee", "split", "xargs",
-		"chmod", "chown", "select",
-		"ps", "kill", "sleep", "jobs",
-		"uname", "uptime", "date", "cal", "hostname", "whoami", "id", "groups", "w", "who",
-		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
-		"md5sum", "md5", "sha1sum", "sha1", "sha256sum", "sha256",
-		"tar", "gzip", "gunzip", "zip", "unzip",
-		"echo", "printf", "yes", "seq", "base64", "rev",
-		"set", "unset", "vars", "export", "env", "printenv",
-		"alias", "unalias", "aliases", "which", "type",
-		"bc", "factor", "random",
-		"box", "history", "clear", "help", "man", "true", "false",
-		"exit", "quit", "source", ".", "watch",
-		// builtins2.go
-		"lsof", "top", "vmstat", "iostat", "free", "lscpu", "lsusb", "lspci", "dmesg",
-		"journalctl", "systemctl", "service",
-		"nice", "timeout", "pgrep", "pkill", "nohup", "bg", "fg",
-		"lsblk", "mount", "umount", "fdisk", "blkid", "mkfifo",
-		"readlink", "realpath", "basename", "dirname", "mktemp",
-		"ss", "netstat", "traceroute", "tracert", "mtr", "openssl",
-		"ssh", "scp", "rsync",
-		"httpget", "httppost", "jq",
-		"xxd", "od", "strings", "column", "nl", "fold", "expand", "unexpand",
-		"paste", "join", "comm", "shuf", "numfmt",
-		"eval", "exec", "test", "[",
-		"read", "mapfile", "readarray", "declare", "typeset", "getopts",
-		"figlet", "toilet", "lolcat", "banner2", "drawbox", "notify",
-		// passthrough / runner
-		"run", "shell", "capture", "bash", "zsh", "sh", "fish", "ksh",
-		// scripting keywords (also commands)
-		"if", "elif", "else", "fi", "for", "while", "do", "done",
-		"func", "return", "in", "range", "break", "continue",
-		"and", "or", "not", "null", "nil", "print", "println", "pass", "local",
-		"match", "case", "default", "unless", "fallthrough",
-		"try", "catch", "finally", "throw", "raise",
-		"repeat", "until", "switch", "enum", "struct",
-		"defer", "with", "goto", "label", "when", "readonly",
-		"import",
-		// string/array/number ops
-		"upper", "lower", "title", "trim", "ltrim", "rtrim", "strip",
-		"len", "reverse", "repeat", "replace", "replace1",
-		"sub", "sub_n", "pad", "lpad", "center",
-		"startswith", "endswith", "contains", "isnum", "isalpha", "isalnum",
-		"isspace", "isupper", "islower",
-		"lines", "words", "chars", "concat", "prepend",
-		"first", "last", "nth", "slice", "push", "pop", "flatten",
-		"arr_uniq", "arr_sort", "arr_reverse", "arr_len", "arr_join",
-		"arr_contains", "arr_map", "arr_filter", "arr_sum", "arr_min", "arr_max", "arr_avg",
-		"add", "mul", "div", "mod", "pow",
-		"abs", "ceil", "floor", "round", "sqrt", "negate", "hex", "oct", "bin",
-		"tonum", "tostr", "toarray", "split", "join",
-		// data types
-		"map_new", "map_set", "map_get", "map_del", "map_has", "map_keys", "map_values",
-		"map_len", "map_show", "map_merge",
-		"set_new", "set_add", "set_remove", "set_has", "set_union", "set_intersect",
-		"set_diff", "set_show", "set_len",
-		"stack_new", "stack_push", "stack_pop", "stack_peek", "stack_len", "stack_show",
-		"queue_new", "enqueue", "dequeue", "queue_peek", "queue_len", "queue_show",
-		"tuple_get", "tuple_len", "tuple_show",
-		"matrix_new", "matrix_get", "matrix_set", "matrix_add", "matrix_mul",
-		"matrix_transpose", "matrix_det", "matrix_show", "matrix_identity",
-		"typeof", "dt_show",
-	} {
-		m[n] = true
-	}
 	return m
 }()
 
@@ -3561,6 +3490,9 @@ func builtinHelp() (*Result, bool, error) {
   clear               clear the screen
   help                this help text
   exit / quit         leave Katsh
+
+
+  -- for more info, read 'HELP.md'
 `
 	return NewText(help), true, nil
 }
