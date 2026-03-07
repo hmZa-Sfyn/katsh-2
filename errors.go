@@ -114,7 +114,7 @@ func PrintError(err *ShellError) {
 
 	// ── Hint ─────────────────────────────────────────────────────────────────
 	if err.Hint != "" {
-		fmt.Printf("  %s╰─ 💡 hint:%s %s\n", ansiYellow, ansiReset, err.Hint)
+		fmt.Printf("  %s╰─%s  hint:%s %s\n", ansiGrey, ansiYellow, ansiReset, err.Hint)
 	} else {
 		fmt.Printf("  %s╰─%s\n", ansiGrey, ansiReset)
 	}
