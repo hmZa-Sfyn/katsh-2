@@ -435,15 +435,35 @@ func spanize(s string) []span {
 
 func isKeyword(t string) bool {
 	switch strings.ToLower(t) {
-	case "if", "elif", "else", "fi", "for", "while", "do", "done",
-		"func", "return", "in", "range", "break", "continue",
-		"and", "or", "not", "true", "false", "null", "nil", "print", "println",
-		"match", "case", "default", "unless",
+	// Control flow
+	case "if", "elif", "else", "fi",
+		"for", "while", "do", "done", "until",
+		"in", "range", "break", "continue",
+		// Functions
+		"func", "return", "local",
+		// Values
+		"true", "false", "null", "nil",
+		// Logic
+		"and", "or", "not",
+		// Output
+		"print", "println", "pass",
+		// Match/switch
+		"match", "case", "default", "switch", "fallthrough",
+		// Conditional shortcuts
+		"unless", "when",
+		// Error handling
 		"try", "catch", "finally", "throw", "raise",
-		"repeat", "until", "pass", "local",
-		"import", "export",
-		"switch", "enum", "struct",
-		"defer", "with", "goto", "label", "when",
+		// Loops
+		"repeat",
+		// Type declarations
+		"enum", "struct",
+		// Scoping
+		"defer", "with",
+		// Jumping
+		"goto", "label",
+		// Module
+		"import", "export", "readonly",
+		// Data type constructors (highlighted as keywords)
 		"map", "set", "stack", "queue", "tuple", "matrix":
 		return true
 	}
@@ -452,10 +472,28 @@ func isKeyword(t string) bool {
 
 func isSyntaxOp(t string) bool {
 	switch t {
-	case "|", "||", "&&", "=", "==", "!=", ">=", "<=", ">", "<",
-		"++", "--", "+=", "-=", "*=", "/=", "%=", "**=", "**",
-		"~=", "!~", "..", ".",
-		"{", "}", "(", ")", "[", "]", ":", ";", "->", "=>":
+	// Pipe / logical
+	case "|", "||", "&&", "|>",
+		// Comparison
+		"==", "!=", ">=", "<=", ">", "<", "~=", "!~", "~",
+		// Assignment / compound
+		"=", "+=", "-=", "*=", "/=", "%=", "**=",
+		// Arithmetic
+		"+", "-", "*", "/", "%", "**",
+		// Increment / decrement
+		"++", "--",
+		// Range / spread
+		"..", "...",
+		// Grouping / structure
+		"{", "}", "(", ")", "[", "]",
+		// Separators
+		":", ";", ",",
+		// Arrow / map
+		"->", "=>", ":=",
+		// String concat
+		".",
+		// Redirect
+		">", ">>", "<", "2>":
 		return true
 	}
 	return false
@@ -534,77 +572,104 @@ func lastWord(s string) string {
 
 func allBuiltinNames() []string {
 	return []string{
-		// Navigation
+		// ── Navigation ──────────────────────────────────────────────────────
 		"cd","pwd","pushd","popd","dirs",
-		// Listing
+		// ── Listing ─────────────────────────────────────────────────────────
 		"ls","ll","la","tree","du","df",
-		// File operations
+		// ── File operations ─────────────────────────────────────────────────
 		"cat","head","tail","touch","mkdir","rmdir","rm","cp","mv","ln",
 		"readlink","realpath","basename","dirname","mktemp","mkfifo",
-		// Inspection
+		// ── Inspection ───────────────────────────────────────────────────────
 		"wc","stat","file","find","diff",
-		// Text processing
+		// ── Text processing ──────────────────────────────────────────────────
 		"grep","sed","awk","cut","tr","sort","uniq","tee","split","xargs",
-		"nl","fold","expand","unexpand","column","paste","comm","shuf",
+		"nl","fold","expand","unexpand","column","paste","join","comm","shuf",
 		"numfmt","rev","strings","xxd","od",
-		// Permissions
+		// ── Permissions ──────────────────────────────────────────────────────
 		"chmod","chown",
-		// Process management
+		// ── Process management ───────────────────────────────────────────────
 		"ps","kill","sleep","jobs","nice","timeout","pgrep","pkill","nohup",
-		"top","lsof","vmstat","iostat",
-		// System info
+		"bg","fg","top","lsof","vmstat","iostat",
+		// ── System info ──────────────────────────────────────────────────────
 		"uname","uptime","date","cal","hostname","whoami","id","groups","who","w",
-		"free","lscpu","lsusb","lspci","dmesg","lsblk","mount","umount","blkid",
-		"journalctl","systemctl","service",
-		// Networking
+		"free","lscpu","lsusb","lspci","dmesg","lsblk","mount","umount",
+		"fdisk","blkid","journalctl","systemctl","service",
+		// ── Networking ───────────────────────────────────────────────────────
 		"ping","curl","wget","nslookup","dig","ifconfig","ip",
-		"ss","netstat","traceroute","mtr","openssl","ssh","scp","rsync",
-		"httpget","httppost","jq",
-		// Hashing / archives
-		"md5sum","sha1sum","sha256sum","md5","sha1","sha256",
+		"ss","netstat","traceroute","tracert","mtr","openssl",
+		"ssh","scp","rsync","httpget","httppost","jq",
+		// ── Hashing / archives ───────────────────────────────────────────────
+		"md5sum","md5","sha1sum","sha1","sha256sum","sha256",
 		"tar","gzip","gunzip","zip","unzip",
-		// Text generation / math
+		// ── Text generation / math ───────────────────────────────────────────
 		"echo","printf","yes","seq","base64","bc","factor","random",
-		// Variables / env
+		// ── Variables / env ──────────────────────────────────────────────────
 		"set","unset","vars","export","import","env","printenv",
-		// Identification
+		"readonly","declare","typeset","getopts",
+		// ── Identification ────────────────────────────────────────────────────
 		"alias","unalias","aliases","which","type",
-		// Scripting helpers
-		"eval","exec","test","read","mapfile","readarray","declare","source",
-		"true","false","pass",
-		// Session
+		// ── Scripting helpers ─────────────────────────────────────────────────
+		"eval","exec","test","[","read","mapfile","readarray","source",".",
+		"true","false","pass","local","break","continue","return",
+		// ── Shell passthrough ─────────────────────────────────────────────────
+		"run","shell","capture","bash","zsh","sh","fish","ksh","dash",
+		// ── Session ───────────────────────────────────────────────────────────
 		"box","history","clear","help","man","watch","exit","quit",
-		// Fun
-		"figlet","matrix","lolcat","drawbox","notify",
-		// Control flow keywords (also syntax-highlighted as keywords)
-		"if","for","while","func","print","println","return",
-		"match","unless","try","repeat","do","switch","enum","struct",
-		"defer","with","throw","raise","goto","label","when",
-		// String / array / number pipe ops
-		"upper","lower","title","trim","ltrim","rtrim","strip",
-		"len","reverse","repeat","replace","replace1","sub","pad","lpad","center",
-		"startswith","endswith","contains","isnum","isalpha","isalnum",
-		"isspace","isupper","islower",
-		"lines","words","chars","join","concat","prepend",
+		// ── Fun / visual ──────────────────────────────────────────────────────
+		"figlet","toilet","lolcat","banner2","drawbox","notify",
+		// ── Scripting keywords ────────────────────────────────────────────────
+		"if","elif","else","fi",
+		"for","while","do","done","until",
+		"in","range",
+		"func","return",
+		"match","case","default","switch","fallthrough",
+		"unless","when",
+		"try","catch","finally","throw","raise",
+		"repeat",
+		"enum","struct",
+		"defer","with",
+		"goto","label",
+		"and","or","not",
+		"null","nil",
+		"print","println",
+		// ── String operations (pipe ops + standalone) ──────────────────────
+		"upper","lower","title",
+		"trim","ltrim","rtrim","strip",
+		"len","reverse","replace","replace1",
+		"sub","sub_n","pad","lpad","center",
+		"startswith","endswith","contains",
+		"isnum","isalpha","isalnum","isspace","isupper","islower",
+		"lines","words","chars","concat","prepend",
+		// ── Array operations ──────────────────────────────────────────────────
 		"first","last","nth","slice","push","pop","flatten",
 		"arr_uniq","arr_sort","arr_reverse","arr_len","arr_join",
-		"arr_contains","arr_map","arr_filter","arr_sum","arr_min","arr_max","arr_avg",
+		"arr_contains","arr_map","arr_filter",
+		"arr_sum","arr_min","arr_max","arr_avg",
+		// ── Number operations ─────────────────────────────────────────────────
 		"add","mul","div","mod","pow",
-		"abs","ceil","floor","round","sqrt","negate","hex","oct","bin",
+		"abs","ceil","floor","round","sqrt","negate",
+		"hex","oct","bin",
 		"tonum","tostr","toarray",
-		// Advanced data type commands
-		"map_new","map_set","map_get","map_del","map_has","map_keys",
-		"map_values","map_len","map_show","map_merge",
-		"set_new","set_add","set_remove","set_has","set_union",
-		"set_intersect","set_diff","set_show","set_len",
+		// ── Type inspection ───────────────────────────────────────────────────
+		"typeof","dt_show",
+		// ── Map commands ──────────────────────────────────────────────────────
+		"map_new","map_set","map_get","map_del","map_has",
+		"map_keys","map_values","map_len","map_show","map_merge",
+		// ── Set commands ──────────────────────────────────────────────────────
+		"set_new","set_add","set_remove","set_has",
+		"set_union","set_intersect","set_diff","set_show","set_len",
+		// ── Stack commands ────────────────────────────────────────────────────
 		"stack_new","stack_push","stack_pop","stack_peek","stack_len","stack_show",
+		// ── Queue commands ────────────────────────────────────────────────────
 		"queue_new","enqueue","dequeue","queue_peek","queue_len","queue_show",
+		// ── Tuple commands ────────────────────────────────────────────────────
 		"tuple_get","tuple_len","tuple_show",
+		// ── Matrix commands ───────────────────────────────────────────────────
 		"matrix_new","matrix_get","matrix_set","matrix_add","matrix_mul",
 		"matrix_transpose","matrix_det","matrix_show","matrix_identity",
-		"typeof","dt_show",
 	}
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Visual width helpers
