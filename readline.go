@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/term"
+	"golang.org/x/text/width"
 )
 
 // isPasteStart returns true when b starts with the bracketed-paste-start sequence
@@ -285,38 +286,69 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 			histIdx = -1
 			fmt.Print(prompt)
 
-		case 0x09: // Tab — completion
+		case 0x09: // Tab
 			opts := sh.completionOptions(string(buf), cursor)
-			switch len(opts) {
-			case 0:
-				// nothing
-			case 1:
-				// complete the word
-				word := lastWord(string(buf[:cursor]))
-				rest := string(buf[cursor:])
-				completed := string(buf[:cursor-len([]rune(word))]) + opts[0]
-				if !strings.HasSuffix(opts[0], "/") {
-					completed += " "
-				}
-				buf = []rune(completed + rest)
-				cursor = len([]rune(completed))
-				redraw()
-			default:
-				// show options below
-				fmt.Print("\r\n")
-				for i, o := range opts {
-					fmt.Printf("  %s%s%s", ansiCyan, o, ansiReset)
-					if i < len(opts)-1 {
-						fmt.Print("  ")
-					}
-				}
-				fmt.Print("\r\n")
-				fmt.Print(prompt)
-				fmt.Print(highlightInput(string(buf)))
-				col := visibleLen(prompt) + runeVisualWidth(buf[:cursor])
-				fmt.Printf("\r\033[%dC", col)
+			if len(opts) == 0 {
+				// bell? or do nothing
+				fmt.Print("\a")
+				continue
 			}
 
+			wordStart := cursor - len([]rune(lastWord(string(buf[:cursor]))))
+			prefix := string(buf[:wordStart])
+
+			if len(opts) == 1 {
+				// Unique match → complete it fully + space if not directory
+				completion := opts[0]
+				rest := string(buf[cursor:])
+				newLine := prefix + completion + rest
+				buf = []rune(newLine)
+				cursor = wordStart + len([]rune(completion))
+				if !strings.HasSuffix(completion, "/") {
+					insertRunes([]rune{' '})
+				}
+				redraw()
+				continue
+			}
+
+			// Multiple matches
+
+			// ── Find longest common prefix ───────────────────────────────────────
+			common := opts[0]
+			for _, o := range opts[1:] {
+				i := 0
+				for i < len(common) && i < len(o) && common[i] == o[i] {
+					i++
+				}
+				common = common[:i]
+			}
+
+			if len(common) > len(lastWord(string(buf[:cursor]))) {
+				// We can complete some prefix
+				completed := prefix + common
+				rest := string(buf[cursor:])
+				buf = []rune(completed + rest)
+				cursor = wordStart + len([]rune(common))
+				redraw()
+				// Don't show list yet — wait for second Tab
+				continue
+			}
+
+			// No more unambiguous prefix → show list
+			fmt.Print("\r\n")
+			cols := 4 // or calculate based on terminal width
+			for i, o := range opts {
+				fmt.Printf("%s%-30s%s", ansiCyan, o, ansiReset)
+				if (i+1)%cols == 0 || i == len(opts)-1 {
+					fmt.Print("\r\n")
+				} else {
+					fmt.Print("  ")
+				}
+			}
+			fmt.Print("\r\n")
+			fmt.Print(prompt + highlightInput(string(buf)))
+			col := visibleLen(prompt) + runeVisualWidth(buf[:cursor])
+			fmt.Printf("\r\033[%dC", col)
 		default:
 			// Printable / multibyte UTF-8 — insert at cursor
 			ch, size := utf8.DecodeRune(b[:n])
@@ -775,4 +807,21 @@ func visibleLen(s string) int {
 }
 
 // runeVisualWidth returns display width of a rune slice (approx 1 per rune).
-func runeVisualWidth(r []rune) int { return len(r) }
+func runeVisualWidth(rs []rune) int {
+	var w int
+	for _, r := range rs {
+		switch width.LookupRune(r).Kind() {
+		case width.EastAsianWide, width.EastAsianFullwidth:
+			w += 2
+		case width.EastAsianNarrow, width.EastAsianHalfwidth:
+			w += 1
+		default:
+			if r >= 0x1F000 && r <= 0x1FFFF { // emoji range approx
+				w += 2
+			} else {
+				w += 1
+			}
+		}
+	}
+	return w
+}
