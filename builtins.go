@@ -2900,29 +2900,52 @@ func primeFactors(n int64) []int64 {
 }
 
 func builtinRandom(sh *Shell, args []string) (*Result, bool, error) {
-	min := 0
-	max := 100
-	count := 1
-	if len(args) >= 1 {
-		fmt.Sscanf(args[0], "%d", &max)
+	min, max, count := 0, 100, 1
+
+	n := len(args)
+	if n >= 1 {
+		if _, err := fmt.Sscanf(args[n-1], "%d", &count); err == nil && n == 3 {
+			// last arg was count → parse first two as min max
+			fmt.Sscanf(args[0], "%d", &min)
+			fmt.Sscanf(args[1], "%d", &max)
+		} else {
+			// no count → last arg is max, previous is min (if any)
+			fmt.Sscanf(args[n-1], "%d", &max)
+			if n >= 2 {
+				fmt.Sscanf(args[0], "%d", &min)
+			}
+		}
 	}
-	if len(args) >= 2 {
-		min = max
-		fmt.Sscanf(args[1], "%d", &max)
+
+	if count < 1 {
+		count = 1
 	}
-	if len(args) >= 3 {
-		fmt.Sscanf(args[2], "%d", &count)
+	if count > 10000 {
+		count = 10000
 	}
-	if count > 1000 {
-		count = 1000
+
+	if max < min {
+		min, max = max, min // polite auto-swap
 	}
-	cols := []string{"n", "value"}
-	var rows []Row
+
+	nRange := max - min + 1
+	if nRange <= 0 {
+		return nil, false, fmt.Errorf("empty or negative range (%d … %d)", min, max)
+	}
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	cols := []string{"#", "value"} // nicer column name maybe?
+	var rows []Row
+
 	for i := 0; i < count; i++ {
-		v := r.Intn(max-min+1) + min
-		rows = append(rows, Row{"n": strconv.Itoa(i + 1), "value": strconv.Itoa(v)})
+		v := r.Intn(nRange) + min
+		rows = append(rows, Row{
+			"#":     strconv.Itoa(i + 1),
+			"value": strconv.Itoa(v),
+		})
 	}
+
 	return NewTable(cols, rows), true, nil
 }
 

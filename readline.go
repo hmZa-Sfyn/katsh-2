@@ -510,7 +510,8 @@ func isKeyword(t string) bool {
 		// Module
 		"import", "export", "readonly",
 		// Data type constructors (highlighted as keywords)
-		"map", "set", "stack", "queue", "tuple", "matrix":
+		"map", "set", "stack", "queue", "tuple", "matrix",
+		"#=", "$", "`", "$(", ")", "[", "]", "{", "}":
 		return true
 	}
 	return false
@@ -745,7 +746,7 @@ func allBuiltinNames() []string {
 		"history", "watch", "clear", "help", "exit", "quit",
 
 		// Special syntax / sigils (not real commands but parsed specially)
-		// "#=", "$", "`", "$(", ")", "[", "]", "{", "}"
+		//"#=", "$", "`", "$(", ")", "[", "]", "{", "}",
 	}
 }
 
