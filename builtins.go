@@ -1403,7 +1403,7 @@ func builtinGrep(sh *Shell, args []string) (*Result, bool, error) {
 	}
 
 	if len(files) == 0 {
-		return nil, true, fmt.Errorf("grep: no files specified (stdin not supported in StructSH — use | grep in pipes)")
+		return nil, true, fmt.Errorf("grep: no files specified (stdin not supported in Katsh — use | grep in pipes)")
 	}
 
 	// Expand recursive
@@ -1829,7 +1829,7 @@ func builtinTee(sh *Shell, args []string) (*Result, bool, error) {
 	if len(args) < 2 {
 		return nil, true, fmt.Errorf("tee: usage: tee <file> (pipe input required)")
 	}
-	// In StructSH, tee reads from a file and writes to another (not stdin)
+	// In Katsh, tee reads from a file and writes to another (not stdin)
 	src := resolvePath(sh.cwd, args[0])
 	dst := resolvePath(sh.cwd, args[1])
 	data, err := os.ReadFile(src)
@@ -3157,7 +3157,7 @@ func builtinMan(sh *Shell, args []string) (*Result, bool, error) {
 	}
 	// Fallback: check if it's our built-in
 	if isBuiltin(cmd) {
-		return NewText(fmt.Sprintf("%s: StructSH built-in command. Use 'help' for full documentation.", cmd)), true, nil
+		return NewText(fmt.Sprintf("%s: Katsh built-in command. Use 'help' for full documentation.", cmd)), true, nil
 	}
 	return NewText(fmt.Sprintf("No manual entry for %s", cmd)), true, nil
 }
@@ -3215,7 +3215,7 @@ func builtinWatch(sh *Shell, args []string) (*Result, bool, error) {
 // ═════════════════════════════════════════════════════════════════════════════
 
 func builtinHelp() (*Result, bool, error) {
-	help := "\n" + sectionHeader("StructSH — Structured Shell v0.3.0") + `
+	help := "\n" + sectionHeader("Katsh — Structured Shell v0.3.0") + `
   Every command output is a table. Chain transforms with | pipes.
   Store any result in the Box with #=.  Run scripts with import.
 
@@ -3560,7 +3560,7 @@ func builtinHelp() (*Result, bool, error) {
   watch [-n s] <cmd>  run command repeatedly
   clear               clear the screen
   help                this help text
-  exit / quit         leave StructSH
+  exit / quit         leave Katsh
 `
 	return NewText(help), true, nil
 }

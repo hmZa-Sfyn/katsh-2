@@ -2,7 +2,7 @@
 
 > **KatSH** is a structured, scriptable shell with typed values, advanced data
 > types, and seamless bash/zsh passthrough.  
-> Built on the **StructSH** engine · Version **0.4.0** · ~12 500 lines of Go
+> Built on the **Katsh** engine · Version **0.4.0** · ~12 500 lines of Go
 
 ---
 
@@ -1502,7 +1502,7 @@ history | where exit_code != 0   # only failed commands
 history | where command ~ "curl" # commands containing curl
 ```
 
-History is saved to `~/.config/structsh/history.json` and loaded on startup.
+History is saved to `~/.config/Katsh/history.json` and loaded on startup.
 
 ---
 
@@ -1780,4 +1780,4 @@ Syntax: `bash!` `zsh!` `sh!` `!` (prefix)
 
 ---
 
-*KatSH · StructSH engine · 19 Go files · ~12 500 lines*
+*KatSH · Katsh engine · 19 Go files · ~12 500 lines*

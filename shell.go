@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strconv"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -52,10 +52,10 @@ func NewShell() *Shell {
 		cwd = "/"
 	}
 	sh := &Shell{
-		cwd:     cwd,
-		box:     NewBox(),
-		aliases: make(map[string]Alias),
-		vars:    make(map[string]string),
+		cwd:          cwd,
+		box:          NewBox(),
+		aliases:      make(map[string]Alias),
+		vars:         make(map[string]string),
 		funcs:        make(map[string]*UserFunc),
 		readonlyVars: make(map[string]bool),
 		arrays:       make(map[string]*ShArray),
@@ -272,13 +272,19 @@ func (sh *Shell) printResult(r *Result) {
 			items := splitArrayResult(text)
 			cols := []string{"index", "value"}
 			rows := make([]Row, len(items))
-			for i, it := range items { rows[i] = Row{"index": strconv.Itoa(i), "value": it} }
+			for i, it := range items {
+				rows[i] = Row{"index": strconv.Itoa(i), "value": it}
+			}
 			if sh.captureMode {
-				for _, it := range items { sh.captureOut.WriteString(it + "\n") }
+				for _, it := range items {
+					sh.captureOut.WriteString(it + "\n")
+				}
 				return
 			}
 			fmt.Println()
-			for _, line := range RenderTable(cols, rows) { fmt.Println(line) }
+			for _, line := range RenderTable(cols, rows) {
+				fmt.Println(line)
+			}
 			fmt.Println()
 			return
 		}
@@ -428,13 +434,14 @@ func (sh *Shell) expandVars(raw string) string {
 // Returns (exitCode, true) if matched; (0, false) if not a passthrough command.
 //
 // Syntax summary:
-//   bash! git log | grep fix          explicit bash — rest of line is the cmd
-//   zsh!  print -P "%F{red}hi%f"      explicit zsh
-//   sh!   for f in *.go; do wc $f; done
-//   run   git log | grep fix          uses $SHELL or bash
-//   !     git log | grep fix          bare ! prefix (same as run)
-//   bash                              bare name → interactive session
-//   zsh                               bare name → interactive session
+//
+//	bash! git log | grep fix          explicit bash — rest of line is the cmd
+//	zsh!  print -P "%F{red}hi%f"      explicit zsh
+//	sh!   for f in *.go; do wc $f; done
+//	run   git log | grep fix          uses $SHELL or bash
+//	!     git log | grep fix          bare ! prefix (same as run)
+//	bash                              bare name → interactive session
+//	zsh                               bare name → interactive session
 func (sh *Shell) tryPassthrough(raw string) (int, bool) {
 	trimmed := strings.TrimSpace(raw)
 
@@ -506,17 +513,28 @@ func (sh *Shell) shellExpand(s string) string {
 func (sh *Shell) expandDollarParens(s string) string {
 	for {
 		start := strings.Index(s, "$(")
-		if start < 0 { break }
+		if start < 0 {
+			break
+		}
 		depth, end := 0, -1
 		for i := start + 2; i < len(s); i++ {
 			switch s[i] {
-			case '(': depth++
+			case '(':
+				depth++
 			case ')':
-				if depth == 0 { end = i } else { depth-- }
+				if depth == 0 {
+					end = i
+				} else {
+					depth--
+				}
 			}
-			if end >= 0 { break }
+			if end >= 0 {
+				break
+			}
 		}
-		if end < 0 { break }
+		if end < 0 {
+			break
+		}
 		inner := s[start+2 : end]
 		inner = sh.expandDollarParens(inner)
 		inner = sh.expandVars(inner)
@@ -538,7 +556,6 @@ func stripOuterQuotes(s string) string {
 	return s
 }
 
-
 // ─────────────────────────────────────────────────────────────────────────────
 //  History persistence
 // ─────────────────────────────────────────────────────────────────────────────
@@ -548,15 +565,15 @@ func historyPaths() (string, string) {
 	var tmpDir, permDir string
 
 	if runtime.GOOS == "windows" {
-		tmpDir = filepath.Join(os.Getenv("TEMP"), "structsh")
-		permDir = filepath.Join(os.Getenv("APPDATA"), "structsh")
+		tmpDir = filepath.Join(os.Getenv("TEMP"), "Katsh")
+		permDir = filepath.Join(os.Getenv("APPDATA"), "Katsh")
 	} else {
-		tmpDir = filepath.Join("/tmp", "structsh")
+		tmpDir = filepath.Join("/tmp", "Katsh")
 		home := os.Getenv("HOME")
 		if home == "" {
 			home = "/"
 		}
-		permDir = filepath.Join(home, ".config", "structsh")
+		permDir = filepath.Join(home, ".config", "Katsh")
 	}
 
 	_ = os.MkdirAll(tmpDir, 0755)
