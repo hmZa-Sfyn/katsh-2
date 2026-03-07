@@ -2836,7 +2836,7 @@ var knownCmds = func() map[string]bool {
 		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
 		"wc", "stat", "file", "find", "diff",
 		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "tee", "split", "xargs",
-		"chmod", "chown",
+		"chmod", "chown", "select",
 		"ps", "kill", "sleep", "jobs",
 		"uname", "uptime", "date", "cal", "hostname", "whoami", "id", "groups", "w", "who",
 		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
