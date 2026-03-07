@@ -2094,16 +2094,34 @@ func builtinKill(sh *Shell, args []string) (*Result, bool, error) {
 
 func builtinSleep(sh *Shell, args []string) (*Result, bool, error) {
 	if len(args) == 0 {
-		return nil, true, fmt.Errorf("sleep: usage: sleep <seconds>")
+		return nil, true, fmt.Errorf("usage: sleep <duration>  (e.g. 500ms, 2.5s, 1m)")
 	}
-	var secs float64
-	if _, err := fmt.Sscanf(args[0], "%f", &secs); err != nil {
-		return nil, true, fmt.Errorf("sleep: invalid duration %q", args[0])
+
+	input := args[0]
+
+	// Special case: plain integer → treat as milliseconds
+	if n, err := strconv.ParseInt(input, 10, 64); err == nil && n >= 0 {
+		if n > 60_000 {
+			return nil, true, fmt.Errorf("sleep: max 60000 ms (60 seconds) in interactive mode")
+		}
+		time.Sleep(time.Duration(n) * time.Millisecond)
+		return NewText(""), true, nil
 	}
-	if secs > 60 {
+
+	// Otherwise use Go's standard duration parser
+	d, err := time.ParseDuration(input)
+	if err != nil {
+		return nil, true, fmt.Errorf("sleep: invalid duration %q (try e.g. 500ms, 1.5s, 2m)", input)
+	}
+
+	if d < 0 {
+		return nil, true, fmt.Errorf("sleep: negative duration not allowed")
+	}
+	if d > 60*time.Second {
 		return nil, true, fmt.Errorf("sleep: max 60 seconds in interactive mode")
 	}
-	time.Sleep(time.Duration(secs * float64(time.Second)))
+
+	time.Sleep(d)
 	return NewText(""), true, nil
 }
 
