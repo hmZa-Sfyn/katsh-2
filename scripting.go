@@ -96,6 +96,33 @@ func (sh *Shell) evalScript(raw string) (bool, int) {
 		if code, ok := sh.tryVarAssign(inner); ok { return true, code }
 	}
 
+	// ── Top-level control-flow keywords — helpful error instead of CommandNotFound
+	switch lower {
+	case "return", "break", "continue":
+		PrintError(&ShellError{
+			Code:    "E002",
+			Kind:    "SyntaxError",
+			Message: fmt.Sprintf("'%s' can only be used inside a func, loop, or block body", lower),
+			Source:  raw,
+			Col:     0,
+			Span:    len(lower),
+			Hint:    "use 'return' inside a func { } body, 'break'/'continue' inside a loop",
+		})
+		return true, 1
+	}
+	if strings.HasPrefix(lower, "return ") {
+		PrintError(&ShellError{
+			Code:    "E002",
+			Kind:    "SyntaxError",
+			Message: "'return' can only be used inside a func body",
+			Source:  raw,
+			Col:     0,
+			Span:    6,
+			Hint:    "define a function with:  func myFunc() { return value }",
+		})
+		return true, 1
+	}
+
 	// && / ||
 	if code, ok := sh.tryAndOr(raw); ok { return true, code }
 
@@ -109,7 +136,13 @@ func (sh *Shell) evalScript(raw string) (bool, int) {
 	parts := tokenize(raw)
 	if len(parts) > 0 {
 		if fn, ok := sh.funcs[parts[0]]; ok {
-			return true, sh.callUserFunc(fn, parts[1:], raw)
+			sh.vars["_return"] = ""
+			code := sh.callUserFunc(fn, parts[1:], raw)
+			// If the function returned a value and we're at the top level, print it
+			if ret := strings.TrimSpace(sh.vars["_return"]); ret != "" {
+				fmt.Println("\n  " + ret + "\n")
+			}
+			return true, code
 		}
 	}
 	return false, 0
@@ -227,6 +260,11 @@ func (sh *Shell) incrVar(name string, d float64) {
 func (sh *Shell) evalRHS(rhs, src string) string {
 	rhs = strings.TrimSpace(rhs)
 	if rhs == "" { return "" }
+	// null / nil / none / undefined → empty string
+	switch strings.ToLower(rhs) {
+	case "null","nil","none","undefined":
+		return ""
+	}
 	// Background command: ?(cmd) — run async, wait for result
 	if strings.HasPrefix(rhs, "?(") && strings.HasSuffix(rhs, ")") {
 		inner := strings.TrimSpace(rhs[2:len(rhs)-1])
@@ -246,6 +284,20 @@ func (sh *Shell) evalRHS(rhs, src string) string {
 		}
 		return strings.TrimRight(out, "\n ")
 	}
+	// Ternary: cond ? then_val : else_val
+	if idx := findTernaryQ(rhs); idx >= 0 {
+		condPart := strings.TrimSpace(rhs[:idx])
+		rest     := rhs[idx+1:]
+		colonIdx := findTernaryColon(rest)
+		if colonIdx >= 0 {
+			thenPart := strings.TrimSpace(rest[:colonIdx])
+			elsePart := strings.TrimSpace(rest[colonIdx+1:])
+			if sh.evalCond(condPart) {
+				return sh.evalRHS(thenPart, src)
+			}
+			return sh.evalRHS(elsePart, src)
+		}
+	}
 	if strings.HasPrefix(strings.ToLower(rhs), "if ") { return sh.evalInlineIf(rhs, src) }
 	// Advanced data type literals: map{}, set{}, stack{}, queue{}, tuple(), matrix()
 	if v, ok := sh.evalDataTypeLiteral(rhs); ok { return v }
@@ -254,6 +306,38 @@ func (sh *Shell) evalRHS(rhs, src string) string {
 	if strings.HasPrefix(rhs,`"`) && strings.HasSuffix(rhs,`"`) { return sh.interpolate(rhs[1:len(rhs)-1]) }
 	if strings.HasPrefix(rhs,"'") && strings.HasSuffix(rhs,"'") { return rhs[1:len(rhs)-1] }
 	return sh.evalExpr(rhs)
+}
+
+// findTernaryQ finds the ? of a ternary outside quotes and nested parens.
+func findTernaryQ(s string) int {
+	depth, inQ := 0, false
+	qCh := rune(0)
+	for i, ch := range s {
+		if inQ { if ch==qCh{inQ=false}; continue }
+		if ch=='"'||ch=='\'' { inQ=true; qCh=ch; continue }
+		if ch=='('||ch=='['||ch=='{' { depth++; continue }
+		if ch==')'||ch==']'||ch=='}' { depth--; continue }
+		if ch=='?' && depth==0 { return i }
+	}
+	return -1
+}
+
+// findTernaryColon finds the : of a ternary outside quotes, skipping nested ternaries.
+func findTernaryColon(s string) int {
+	depth, inQ, nested := 0, false, 0
+	qCh := rune(0)
+	for i, ch := range s {
+		if inQ { if ch==qCh{inQ=false}; continue }
+		if ch=='"'||ch=='\'' { inQ=true; qCh=ch; continue }
+		if ch=='('||ch=='['||ch=='{' { depth++; continue }
+		if ch==')'||ch==']'||ch=='}' { depth--; continue }
+		if ch=='?' && depth==0 { nested++; continue }
+		if ch==':' && depth==0 {
+			if nested > 0 { nested--; continue }
+			return i
+		}
+	}
+	return -1
 }
 
 // interpolate expands $VAR, ${VAR}, ${VAR:-default}, ${#VAR}, backticks, and $().
@@ -522,7 +606,7 @@ func stripQuotes(s string) string {
 // ─── Condition evaluator ──────────────────────────────────────────────────────
 
 func (sh *Shell) evalCond(cond string) bool {
-	cond = strings.TrimSpace(cond)
+	cond  = strings.TrimSpace(cond)
 	lower := strings.ToLower(cond)
 
 	// not / !
@@ -534,6 +618,46 @@ func (sh *Shell) evalCond(cond string) bool {
 	if idx := findOutside(cond," or ");  idx>=0 { return sh.evalCond(cond[:idx])||sh.evalCond(cond[idx+4:]) }
 	if idx := findOutside(cond," && ");  idx>=0 { return sh.evalCond(cond[:idx])&&sh.evalCond(cond[idx+4:]) }
 	if idx := findOutside(cond," || ");  idx>=0 { return sh.evalCond(cond[:idx])||sh.evalCond(cond[idx+4:]) }
+
+	// ── New: "not in" / "in"  ────────────────────────────────────────────
+	// Syntax:  $x in $arr      $x in ["a","b","c"]      "foo" not in $list
+	if idx := findOutside(lower," not in "); idx>=0 {
+		lv  := sh.evalExpr(cond[:idx])
+		col := strings.TrimSpace(cond[idx+8:])
+		return !sh.evalInCond(lv, col)
+	}
+	if idx := findOutside(lower," in "); idx>=0 {
+		lv  := sh.evalExpr(cond[:idx])
+		col := strings.TrimSpace(cond[idx+4:])
+		return sh.evalInCond(lv, col)
+	}
+
+	// ── New: "starts with" / "ends with" / "contains" ────────────────────
+	if idx := findOutside(lower," starts with "); idx>=0 {
+		lv := sh.evalExpr(cond[:idx])
+		rv := stripQuotes(sh.evalExpr(strings.TrimSpace(cond[idx+13:])))
+		return strings.HasPrefix(lv, rv)
+	}
+	if idx := findOutside(lower," ends with "); idx>=0 {
+		lv := sh.evalExpr(cond[:idx])
+		rv := stripQuotes(sh.evalExpr(strings.TrimSpace(cond[idx+11:])))
+		return strings.HasSuffix(lv, rv)
+	}
+	if idx := findOutside(lower," contains "); idx>=0 {
+		lv := sh.evalExpr(cond[:idx])
+		rv := stripQuotes(sh.evalExpr(strings.TrimSpace(cond[idx+10:])))
+		return strings.Contains(lv, rv)
+	}
+
+	// ── New: "is empty" / "is not empty" ─────────────────────────────────
+	if strings.HasSuffix(lower," is empty") {
+		v := sh.evalExpr(strings.TrimSpace(cond[:len(cond)-9]))
+		return strings.TrimSpace(v) == ""
+	}
+	if strings.HasSuffix(lower," is not empty") {
+		v := sh.evalExpr(strings.TrimSpace(cond[:len(cond)-13]))
+		return strings.TrimSpace(v) != ""
+	}
 
 	// Comparison operators
 	for _, op := range []string{"!=",">=","<=","==","!~","~=",">","<","~"} {
@@ -554,15 +678,39 @@ func (sh *Shell) evalCond(cond string) bool {
 		}
 	}
 
-	// Test flags: -z -n -f -d -e -r
+	// Test flags: -z -n -f -d -e -r -s (file size > 0)
 	if strings.HasPrefix(cond,"-") {
 		parts := strings.Fields(cond)
 		if len(parts)==2 { return evalTestFlag(parts[0],sh.evalExpr(parts[1])) }
 	}
 
 	v := strings.ToLower(strings.TrimSpace(sh.evalExpr(cond)))
-	switch v { case "true","1","yes": return true; case "false","0","no","": return false }
+	switch v { case "true","1","yes": return true; case "false","0","no","","null","nil","none","undefined": return false }
 	return v != ""
+}
+
+// evalInCond tests whether lv is contained in the collection described by expr.
+// Handles arrays, maps (key check), and space-separated word lists.
+func (sh *Shell) evalInCond(lv, expr string) bool {
+	expr = strings.TrimSpace(expr)
+	// Inline array literal: ["a", "b"]
+	if strings.HasPrefix(expr,"[") && strings.HasSuffix(expr,"]") {
+		items := sh.parseArrayLiteral(expr)
+		for _, it := range items { if it == lv { return true } }
+		return false
+	}
+	// Variable
+	val := sh.evalExpr(expr)
+	if strings.HasPrefix(val,"[") {
+		// Stored array
+		name := ""
+		if strings.HasPrefix(expr,"$") { name = expr[1:] } else { name = expr }
+		for _, it := range sh.arrayItems(name) { if it == lv { return true } }
+		return false
+	}
+	// Space-separated words or substring check
+	for _, w := range strings.Fields(val) { if w == lv { return true } }
+	return false
 }
 
 func evalTestFlag(flag, val string) bool {
@@ -573,6 +721,8 @@ func evalTestFlag(flag, val string) bool {
 	case "-d": info,err:=os.Stat(val); return err==nil&&info.IsDir()
 	case "-e": _,err:=os.Stat(val); return err==nil
 	case "-r": f,err:=os.Open(val); if err!=nil{return false}; f.Close(); return true
+	case "-s": info,err:=os.Stat(val); return err==nil&&info.Size()>0
+	case "-w": f,err:=os.OpenFile(val,os.O_WRONLY,0); if err!=nil{return false}; f.Close(); return true
 	}
 	return false
 }
