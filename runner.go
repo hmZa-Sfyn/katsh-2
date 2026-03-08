@@ -120,6 +120,9 @@ func runLines(sh *Shell, src, srcName string, scriptArgs []string, opts ScriptOp
 	start := time.Now()
 	lastCode := 0
 
+	// ── Store script name for error reporting ──────────────────────────────
+	sh.currentFile = filepath.Base(srcName)
+
 	// ── Execute each logical line ───────────────────────────────────────────
 	for i, line := range logicalLines {
 		lineNo := lineNums[i]
@@ -127,6 +130,10 @@ func runLines(sh *Shell, src, srcName string, scriptArgs []string, opts ScriptOp
 
 		// Skip blanks and pure comments
 		if line == "" || isComment(line) { continue }
+
+		// Update location for error messages
+		sh.currentLine = lineNo
+		sh.currentSrc  = line
 
 		// Verbose mode: print raw line as read
 		if opts.Verbose {
@@ -155,8 +162,13 @@ func runLines(sh *Shell, src, srcName string, scriptArgs []string, opts ScriptOp
 		if code != 0 {
 			lastCode = code
 			if opts.ExitOnError {
-				fmt.Fprintf(os.Stderr, "\n  %s✘ Script exited at %s:%d (exit code %d)%s\n\n",
-					ansiRed, filepath.Base(srcName), lineNo, code, ansiReset)
+				// Rich exit-on-error message with file, line, source
+				fmt.Fprintf(os.Stderr, "\n  %s✘ %s:%d — script aborted (exit code %d)%s\n",
+					ansiRed+ansiBold, filepath.Base(srcName), lineNo, code, ansiReset)
+				fmt.Fprintf(os.Stderr, "  %s│  %s%s\n",
+					ansiGrey, line, ansiReset)
+				fmt.Fprintf(os.Stderr, "  %s╰─ add 'try { } catch e { }' to handle this error%s\n\n",
+					ansiYellow, ansiReset)
 				return code
 			}
 		} else {

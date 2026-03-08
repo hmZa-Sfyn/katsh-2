@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -8,14 +9,42 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Shell — runtime state
+//  Background job
 // ─────────────────────────────────────────────────────────────────────────────
+
+// BgJob represents a command running asynchronously via ?(cmd) syntax.
+type BgJob struct {
+	ID     int
+	Cmd    string
+	Done   chan struct{}
+	Result string
+	Err    error
+}
+
+// runBgJob executes cmd in a goroutine and stores the result.
+func runBgJob(cmd, cwd string) *BgJob {
+	job := &BgJob{Cmd: cmd, Done: make(chan struct{})}
+	go func() {
+		defer close(job.Done)
+		out, err := RunCaptureShell("", cmd, cwd)
+		job.Result = strings.TrimRight(out, "\n ")
+		job.Err = err
+	}()
+	return job
+}
+
+// waitBgJob blocks until the job finishes and returns its output.
+func waitBgJob(job *BgJob) (string, error) {
+	<-job.Done
+	return job.Result, job.Err
+}
+
+
 
 type HistoryEntry struct {
 	Raw      string    `json:"raw"`
@@ -44,6 +73,18 @@ type Shell struct {
 	// Output capture (for backtick subshells)
 	captureMode bool
 	captureOut  bytes.Buffer
+
+	// Error location tracking — updated by runner.go before each execLine call
+	currentLine int    // 1-based physical line number in the running script
+	currentFile string // basename of the running script (e.g. "myscript.ksh")
+	currentSrc  string // the raw source line being executed
+
+	// Background job tracking
+	bgJobs []*BgJob
+
+	// Throw signal — carry the thrown message through non-zero return codes
+	// so try/catch can retrieve the exact thrown string, not just "exit code N"
+	thrownMsg string // set by throw/raise, cleared by catch
 }
 
 func NewShell() *Shell {
@@ -52,10 +93,10 @@ func NewShell() *Shell {
 		cwd = "/"
 	}
 	sh := &Shell{
-		cwd:          cwd,
-		box:          NewBox(),
-		aliases:      make(map[string]Alias),
-		vars:         make(map[string]string),
+		cwd:     cwd,
+		box:     NewBox(),
+		aliases: make(map[string]Alias),
+		vars:    make(map[string]string),
 		funcs:        make(map[string]*UserFunc),
 		readonlyVars: make(map[string]bool),
 		arrays:       make(map[string]*ShArray),
@@ -105,6 +146,11 @@ func (sh *Shell) execLine(raw string) int {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return 0
+	}
+
+	// Track current source for error reporting
+	if sh.currentSrc == "" || sh.currentLine == 0 {
+		sh.currentSrc = raw
 	}
 
 	// ── Expand backticks in the raw line before anything else ─────────────
@@ -272,19 +318,13 @@ func (sh *Shell) printResult(r *Result) {
 			items := splitArrayResult(text)
 			cols := []string{"index", "value"}
 			rows := make([]Row, len(items))
-			for i, it := range items {
-				rows[i] = Row{"index": strconv.Itoa(i), "value": it}
-			}
+			for i, it := range items { rows[i] = Row{"index": strconv.Itoa(i), "value": it} }
 			if sh.captureMode {
-				for _, it := range items {
-					sh.captureOut.WriteString(it + "\n")
-				}
+				for _, it := range items { sh.captureOut.WriteString(it + "\n") }
 				return
 			}
 			fmt.Println()
-			for _, line := range RenderTable(cols, rows) {
-				fmt.Println(line)
-			}
+			for _, line := range RenderTable(cols, rows) { fmt.Println(line) }
 			fmt.Println()
 			return
 		}
@@ -317,6 +357,13 @@ func (sh *Shell) printResult(r *Result) {
 func (sh *Shell) printErr(e *ShellError) {
 	if e == nil {
 		return
+	}
+	// Inject file/line if not already set
+	if e.Line == 0 && sh.currentLine > 0 {
+		e.Line = sh.currentLine
+	}
+	if e.Source == "" && sh.currentSrc != "" {
+		e.Source = sh.currentSrc
 	}
 	if sh.captureMode {
 		// In capture mode just write to stderr
@@ -434,14 +481,13 @@ func (sh *Shell) expandVars(raw string) string {
 // Returns (exitCode, true) if matched; (0, false) if not a passthrough command.
 //
 // Syntax summary:
-//
-//	bash! git log | grep fix          explicit bash — rest of line is the cmd
-//	zsh!  print -P "%F{red}hi%f"      explicit zsh
-//	sh!   for f in *.go; do wc $f; done
-//	run   git log | grep fix          uses $SHELL or bash
-//	!     git log | grep fix          bare ! prefix (same as run)
-//	bash                              bare name → interactive session
-//	zsh                               bare name → interactive session
+//   bash! git log | grep fix          explicit bash — rest of line is the cmd
+//   zsh!  print -P "%F{red}hi%f"      explicit zsh
+//   sh!   for f in *.go; do wc $f; done
+//   run   git log | grep fix          uses $SHELL or bash
+//   !     git log | grep fix          bare ! prefix (same as run)
+//   bash                              bare name → interactive session
+//   zsh                               bare name → interactive session
 func (sh *Shell) tryPassthrough(raw string) (int, bool) {
 	trimmed := strings.TrimSpace(raw)
 
@@ -509,37 +555,75 @@ func (sh *Shell) shellExpand(s string) string {
 }
 
 // expandDollarParens replaces $(...) with captured shell output.
+// Also handles ?(cmd) — background execution; all ?(cmd) on a line
+// are launched in parallel, then collected left-to-right.
 // Supports nesting:  x = $(echo $(whoami))
 func (sh *Shell) expandDollarParens(s string) string {
+	// ── First pass: launch ?(cmd) goroutines in parallel ─────────────────
+	type bgSlot struct {
+		start, end int    // byte offsets in original s
+		job        *BgJob
+	}
+	var bgSlots []bgSlot
+	for i := 0; i < len(s)-1; {
+		if s[i] != '?' || s[i+1] != '(' {
+			i++
+			continue
+		}
+		depth, end := 0, -1
+		for j := i + 2; j < len(s); j++ {
+			switch s[j] {
+			case '(':  depth++
+			case ')':
+				if depth == 0 { end = j } else { depth-- }
+			}
+			if end >= 0 { break }
+		}
+		if end < 0 { i++; continue }
+		inner := strings.TrimSpace(s[i+2 : end])
+		inner  = sh.expandVars(inner)
+		job    := runBgJob(inner, sh.cwd)
+		bgSlots = append(bgSlots, bgSlot{i, end, job})
+		i = end + 1 // skip past this ?(...)
+	}
+	// Collect bg results right-to-left so byte offsets stay valid
+	for idx := len(bgSlots) - 1; idx >= 0; idx-- {
+		slot := bgSlots[idx]
+		out, err := waitBgJob(slot.job)
+		if err != nil && sh.errHandlerDepth == 0 {
+			PrintError(&ShellError{
+				Code:    "E012",
+				Kind:    "BackgroundError",
+				Message: fmt.Sprintf("background command failed: %v", err),
+				Source:  sh.currentSrc,
+				Line:    sh.currentLine,
+				Col:     slot.start,
+				Hint:    "check the command inside ?(...) is valid and in $PATH",
+				Fix:     "use $(...) for synchronous capture, or wrap in try/catch",
+			})
+		}
+		s = s[:slot.start] + strings.TrimRight(out, "\n ") + s[slot.end+1:]
+	}
+
+	// ── Second pass: expand $(...) inline (iterative, handles nesting) ───
 	for {
 		start := strings.Index(s, "$(")
-		if start < 0 {
-			break
-		}
+		if start < 0 { break }
 		depth, end := 0, -1
 		for i := start + 2; i < len(s); i++ {
 			switch s[i] {
-			case '(':
-				depth++
+			case '(': depth++
 			case ')':
-				if depth == 0 {
-					end = i
-				} else {
-					depth--
-				}
+				if depth == 0 { end = i } else { depth-- }
 			}
-			if end >= 0 {
-				break
-			}
+			if end >= 0 { break }
 		}
-		if end < 0 {
-			break
-		}
+		if end < 0 { break }
 		inner := s[start+2 : end]
-		inner = sh.expandDollarParens(inner)
-		inner = sh.expandVars(inner)
+		inner  = sh.expandDollarParens(inner)
+		inner  = sh.expandVars(inner)
 		out, _ := RunCaptureShell("", inner, sh.cwd)
-		s = s[:start] + out + s[end+1:]
+		s = s[:start] + strings.TrimRight(out, "\n ") + s[end+1:]
 	}
 	return s
 }
@@ -555,6 +639,7 @@ func stripOuterQuotes(s string) string {
 	}
 	return s
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  History persistence

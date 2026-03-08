@@ -35,6 +35,25 @@ func (sh *Shell) evalScript(raw string) (bool, int) {
 		return true, 0
 	}
 
+	// ── Background command: data = ?(cmd) handled in evalRHS ─────────────
+	// Also handle it as standalone:  ?(curl ...) for fire-and-print
+	if strings.HasPrefix(raw, "?(") && strings.HasSuffix(raw, ")") {
+		inner := strings.TrimSpace(raw[2:len(raw)-1])
+		inner  = sh.expandVars(inner)
+		job    := runBgJob(inner, sh.cwd)
+		out, err := waitBgJob(job)
+		if err != nil && sh.errHandlerDepth == 0 {
+			PrintError(&ShellError{
+				Code: "E012", Kind: "BackgroundError",
+				Message: fmt.Sprintf("background command failed: %v", err),
+				Source:  raw, Line: sh.currentLine,
+			})
+		} else if out != "" {
+			fmt.Println("\n  " + strings.ReplaceAll(strings.TrimRight(out, "\n"), "\n", "\n  ") + "\n")
+		}
+		return true, 0
+	}
+
 	// ── New features (scripting2.go) ──────────────────────────────────────
 	if handled, code := sh.evalScript2(raw); handled {
 		return true, code
@@ -208,6 +227,25 @@ func (sh *Shell) incrVar(name string, d float64) {
 func (sh *Shell) evalRHS(rhs, src string) string {
 	rhs = strings.TrimSpace(rhs)
 	if rhs == "" { return "" }
+	// Background command: ?(cmd) — run async, wait for result
+	if strings.HasPrefix(rhs, "?(") && strings.HasSuffix(rhs, ")") {
+		inner := strings.TrimSpace(rhs[2:len(rhs)-1])
+		inner  = sh.expandVars(inner)
+		job    := runBgJob(inner, sh.cwd)
+		out, err := waitBgJob(job)
+		if err != nil && sh.errHandlerDepth == 0 {
+			PrintError(&ShellError{
+				Code:    "E012",
+				Kind:    "BackgroundError",
+				Message: fmt.Sprintf("background command failed: %v", err),
+				Source:  src,
+				Line:    sh.currentLine,
+				Col:     strings.Index(src, "?("),
+				Hint:    "check the command inside ?(...) is valid and in $PATH",
+			})
+		}
+		return strings.TrimRight(out, "\n ")
+	}
 	if strings.HasPrefix(strings.ToLower(rhs), "if ") { return sh.evalInlineIf(rhs, src) }
 	// Advanced data type literals: map{}, set{}, stack{}, queue{}, tuple(), matrix()
 	if v, ok := sh.evalDataTypeLiteral(rhs); ok { return v }
@@ -271,15 +309,63 @@ func (sh *Shell) arrayGet(name, idx string) string {
 	// Tuple subscript: t[0]
 	if strings.HasPrefix(raw, tupPfx) {
 		n, err := strconv.Atoi(idx)
-		if err != nil { return "" }
+		if err != nil {
+			PrintError(&ShellError{
+				Code:    "E013",
+				Kind:    "IndexError",
+				Message: fmt.Sprintf("tuple index must be an integer, got %q", idx),
+				Source:  sh.currentSrc,
+				Line:    sh.currentLine,
+				Col:     strings.Index(sh.currentSrc, idx),
+				Hint:    "tuple indices are 0-based integers: t[0], t[1], ...",
+			})
+			return ""
+		}
 		return tupleGet(raw, n)
 	}
 	items := sh.arrayItems(name)
 	if idx == "len" || idx == "#" { return strconv.Itoa(len(items)) }
 	i, err := strconv.Atoi(idx)
-	if err != nil { return "" }
+	if err != nil {
+		PrintError(&ShellError{
+			Code:    "E013",
+			Kind:    "IndexError",
+			Message: fmt.Sprintf("array index must be an integer, got %q in %s[%s]", idx, name, idx),
+			Source:  sh.currentSrc,
+			Line:    sh.currentLine,
+			Col:     strings.Index(sh.currentSrc, name),
+			Span:    len(name),
+			Hint:    fmt.Sprintf("use an integer index like %s[0], or arr_len to get the length", name),
+		})
+		return ""
+	}
 	if i < 0 { i = len(items)+i }
-	if i < 0 || i >= len(items) { return "" }
+	if i < 0 || i >= len(items) {
+		if len(items) == 0 {
+			PrintError(&ShellError{
+				Code:    "E013",
+				Kind:    "IndexError",
+				Message: fmt.Sprintf("%s[%d]: array is empty", name, i),
+				Source:  sh.currentSrc,
+				Line:    sh.currentLine,
+				Col:     strings.Index(sh.currentSrc, name),
+				Span:    len(name),
+				Hint:    fmt.Sprintf("'%s' has no elements — append with:  %s[] = value", name, name),
+			})
+		} else {
+			PrintError(&ShellError{
+				Code:    "E013",
+				Kind:    "IndexError",
+				Message: fmt.Sprintf("%s[%d]: index out of range (array has %d element(s), valid: 0..%d)", name, i, len(items), len(items)-1),
+				Source:  sh.currentSrc,
+				Line:    sh.currentLine,
+				Col:     strings.Index(sh.currentSrc, name),
+				Span:    len(name),
+				Hint:    fmt.Sprintf("use a negative index to count from the end: %s[-1] is the last element", name),
+			})
+		}
+		return ""
+	}
 	return items[i]
 }
 func (sh *Shell) arraySet(name, idx, val string) {
@@ -358,8 +444,36 @@ func tryArith(sh *Shell, expr string) (string, bool) {
 		case "+": r = lv+rv
 		case "-": r = lv-rv
 		case "*": r = lv*rv
-		case "/": if rv==0{return "0",true}; r=lv/rv
-		case "%": if rv==0{return "0",true}; r=math.Mod(lv,rv)
+		case "/":
+			if rv == 0 {
+				col := strings.Index(sh.currentSrc, "/")
+				PrintError(&ShellError{
+					Code:    "E006",
+					Kind:    "DivisionByZero",
+					Message: fmt.Sprintf("cannot divide %s by zero", fmtNum(lv)),
+					Source:  sh.currentSrc,
+					Line:    sh.currentLine,
+					Col:     col, Span: 1,
+					Hint:    "check the divisor is non-zero before dividing",
+					Fix:     "if denom != 0 { result = num / denom }",
+				})
+				return "0", true
+			}
+			r = lv/rv
+		case "%":
+			if rv == 0 {
+				PrintError(&ShellError{
+					Code:    "E006",
+					Kind:    "DivisionByZero",
+					Message: "modulo by zero",
+					Source:  sh.currentSrc,
+					Line:    sh.currentLine,
+					Col:     strings.Index(sh.currentSrc, "%"), Span: 1,
+					Hint:    "the right operand of % must not be zero",
+				})
+				return "0", true
+			}
+			r = math.Mod(lv,rv)
 		}
 		return fmtNum(r), true
 	}
@@ -720,12 +834,34 @@ func (sh *Shell) evalTry(raw string) int {
 		finallyBody = extractBody(strings.TrimSpace(remaining[7:]))
 	}
 
+	// Run the try body; suppress throw's printed output inside try
+	sh.errHandlerDepth++
+	savedThrown := sh.thrownMsg
+	sh.thrownMsg = ""
 	code := sh.execBodyLines(body)
-	if code!=0 && catchBody!="" {
-		if catchVar!="" { sh.setVar(catchVar,fmt.Sprintf("exit code %d",code)) }
-		code = sh.execBodyLines(catchBody)
+	sh.errHandlerDepth--
+	thrown := sh.thrownMsg
+	if thrown == "" && code != 0 {
+		// Non-throw error — use lastErrMsg or generic description
+		if sh.lastErrMsg != "" {
+			thrown = sh.lastErrMsg
+		} else {
+			thrown = fmt.Sprintf("command failed with exit code %d", code)
+		}
 	}
-	if finallyBody!="" { sh.execBodyLines(finallyBody) }
+
+	if code != 0 && catchBody != "" {
+		if catchVar != "" {
+			sh.vars[catchVar] = thrown // bypass setVar readonly check for internal var
+		}
+		sh.thrownMsg = savedThrown // restore outer throw context
+		sh.lastErrMsg = ""
+		code = sh.execBodyLines(catchBody)
+	} else {
+		sh.thrownMsg = savedThrown
+	}
+
+	if finallyBody != "" { sh.execBodyLines(finallyBody) }
 	return code
 }
 
@@ -755,6 +891,22 @@ func (sh *Shell) evalFuncDef(raw string) int {
 }
 
 func (sh *Shell) callUserFunc(fn *UserFunc, args []string, src string) int {
+	// Argument count check — provide rich error
+	if len(fn.Params) > 0 && len(args) < len(fn.Params) {
+		// Missing required args — warn but continue (use "" for missing)
+		PrintError(&ShellError{
+			Code:    "E007",
+			Kind:    "ArgumentError",
+			Message: fmt.Sprintf("%s() expects %d argument(s), got %d", fn.Name, len(fn.Params), len(args)),
+			Source:  src,
+			Line:    sh.currentLine,
+			Col:     strings.Index(src, fn.Name),
+			Span:    len(fn.Name),
+			Hint:    fmt.Sprintf("func %s takes: (%s)", fn.Name, strings.Join(fn.Params, ", ")),
+			Fix:     fmt.Sprintf("%s %s", fn.Name, strings.Repeat("\"value\" ", len(fn.Params))),
+		})
+	}
+
 	saved := make(map[string]string)
 	for i,p := range fn.Params {
 		saved[p] = sh.vars[p]
@@ -801,13 +953,24 @@ const (codeBreak=-1; codeContinue=-2; codeReturn=-3)
 
 func (sh *Shell) execBodyLines(body string) int {
 	for _, line := range bodyLines(body) {
-		line=strings.TrimSpace(line); if line==""||strings.HasPrefix(line,"#")||strings.HasPrefix(line,"//"){continue}
-		low:=strings.ToLower(line)
-		if low=="break"{return codeBreak}; if low=="continue"{return codeContinue}; if low=="pass"{continue}
-		if strings.HasPrefix(low,"return") { val:=strings.TrimSpace(line[6:]); if val!=""{sh.setVar("_return",sh.evalExpr(val))}; return codeReturn }
-		code:=sh.execLine(line)
-		if code==codeBreak||code==codeContinue||code==codeReturn{return code}
-		if code!=0{return code}
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line,"#") || strings.HasPrefix(line,"//") { continue }
+		low := strings.ToLower(line)
+		if low == "break"    { return codeBreak }
+		if low == "continue" { return codeContinue }
+		if low == "pass"     { continue }
+		if strings.HasPrefix(low,"return") {
+			val := strings.TrimSpace(line[6:])
+			if val != "" { sh.vars["_return"] = sh.evalExpr(val) } // direct map write to skip readonly
+			return codeReturn
+		}
+		// Track the currently-executing source line for error messages
+		prevSrc := sh.currentSrc
+		sh.currentSrc = line
+		code := sh.execLine(line)
+		sh.currentSrc = prevSrc
+		if code == codeBreak || code == codeContinue || code == codeReturn { return code }
+		if code != 0 { return code }
 	}
 	return 0
 }
@@ -863,8 +1026,35 @@ func (sh *Shell) getVar(name string) string {
 	if v,ok:=sh.vars[name];ok{return v}
 	return os.Getenv(name)
 }
-func (sh *Shell) setVar(name,val string) { sh.vars[name]=val }
-func (sh *Shell) delVar(name string) { delete(sh.vars,name) }
+
+// setVar assigns a variable, enforcing readonly protection.
+func (sh *Shell) setVar(name, val string) {
+	if sh.readonlyVars[name] {
+		locStr := ""
+		if sh.currentFile != "" {
+			locStr = fmt.Sprintf(" (at %s", sh.currentFile)
+			if sh.currentLine > 0 {
+				locStr += fmt.Sprintf(":%d", sh.currentLine)
+			}
+			locStr += ")"
+		}
+		PrintError(&ShellError{
+			Code:    "E008",
+			Kind:    "ReadonlyError",
+			Message: fmt.Sprintf("cannot reassign readonly variable %q%s", name, locStr),
+			Source:  sh.currentSrc,
+			Col:     strings.Index(sh.currentSrc, name),
+			Span:    len(name),
+			Line:    sh.currentLine,
+			Hint:    fmt.Sprintf("'%s' was declared readonly — use a different variable name or remove the readonly declaration", name),
+			Fix:     "unset " + name + "  # removes readonly; then reassign",
+		})
+		return
+	}
+	sh.vars[name] = val
+}
+
+func (sh *Shell) delVar(name string) { delete(sh.vars, name) }
 
 // ─── Misc helpers ─────────────────────────────────────────────────────────────
 
