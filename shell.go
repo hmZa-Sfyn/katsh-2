@@ -246,7 +246,7 @@ func (sh *Shell) execLine(raw string) int {
 			return 0
 		}
 		var err error
-		result, err = ApplyPipes(result, pc.Pipes, sh)
+		result, err = ApplyPipes(result, pc.Pipes)
 		if err != nil {
 			sh.printErr(wrapErr(err, strings.Join(pc.Args, " ")))
 			return 1
@@ -277,7 +277,7 @@ func (sh *Shell) execLine(raw string) int {
 			return 1
 		}
 		if result != nil && (result.IsTable || strings.TrimSpace(result.Text) != "") {
-			result, err = ApplyPipes(result, pc.Pipes, sh)
+			result, err = ApplyPipes(result, pc.Pipes)
 			if err != nil {
 				sh.printErr(wrapErr(err, raw))
 				return 1
@@ -295,7 +295,7 @@ func (sh *Shell) execLine(raw string) int {
 		code := sh.callUserFunc(fn, args, raw)
 		if code == 0 && len(pc.Pipes) > 0 && sh.vars["_return"] != "" {
 			result = NewTyped(sh.vars["_return"], KindString)
-			result, _ = ApplyPipes(result, pc.Pipes, sh)
+			result, _ = ApplyPipes(result, pc.Pipes)
 			sh.printResult(result)
 		}
 		return code
@@ -321,7 +321,7 @@ func (sh *Shell) execLine(raw string) int {
 		sh.printErr(wrapErr(err, raw))
 		return 1
 	}
-	result, err = ApplyPipes(result, pc.Pipes, sh)
+	result, err = ApplyPipes(result, pc.Pipes)
 	if err != nil {
 		sh.printErr(wrapErr(err, raw))
 		return 1
