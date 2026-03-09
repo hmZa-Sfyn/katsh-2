@@ -9,7 +9,7 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  StructSH — 10 new scripting features
+//  Katsh — 10 new scripting features
 //
 //  1.  return values from functions  — result = add(3, 4)
 //  2.  switch statement              — switch $x { "a": ... "b": ... }
