@@ -23,13 +23,17 @@ func findPasteEnd(buf []byte) int {
 	for i := 0; i <= len(buf)-6; i++ {
 		match := true
 		for j := 0; j < 6; j++ {
-			if buf[i+j] != end[j] { match = false; break }
+			if buf[i+j] != end[j] {
+				match = false
+				break
+			}
 		}
-		if match { return i }
+		if match {
+			return i
+		}
 	}
 	return -1
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Readline — full raw-mode line editor
@@ -69,10 +73,10 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 
 	fmt.Print(prompt)
 
-	var buf     []rune
-	cursor      := 0
-	histIdx     := -1
-	savedLine   := ""
+	var buf []rune
+	cursor := 0
+	histIdx := -1
+	savedLine := ""
 
 	// insertRunes inserts a slice of runes at cursor position.
 	insertRunes := func(runes []rune) {
@@ -94,7 +98,6 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 		col := pLen + runeVisualWidth(buf[:cursor])
 		fmt.Printf("\r\033[%dC", col)
 	}
-
 
 	for {
 		raw := make([]byte, 256)
@@ -118,7 +121,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 				}
 				chunk := make([]byte, 512)
 				nr, er := os.Stdin.Read(chunk)
-				if er != nil || nr == 0 { break }
+				if er != nil || nr == 0 {
+					break
+				}
 				pasteBuf = append(pasteBuf, chunk[:nr]...)
 			}
 			text := string(pasteBuf)
@@ -155,7 +160,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 			if n >= 3 && b[1] == '[' {
 				switch b[2] {
 				case 'A': // ↑ up — history prev
-					if len(sh.history) == 0 { continue }
+					if len(sh.history) == 0 {
+						continue
+					}
 					if histIdx == -1 {
 						savedLine = string(buf)
 						histIdx = len(sh.history) - 1
@@ -167,7 +174,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					redraw()
 
 				case 'B': // ↓ down — history next
-					if histIdx == -1 { continue }
+					if histIdx == -1 {
+						continue
+					}
 					if histIdx < len(sh.history)-1 {
 						histIdx++
 						buf = []rune(sh.history[histIdx].Raw)
@@ -179,16 +188,24 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					redraw()
 
 				case 'C': // → right
-					if cursor < len(buf) { cursor++; redraw() }
+					if cursor < len(buf) {
+						cursor++
+						redraw()
+					}
 
 				case 'D': // ← left
-					if cursor > 0 { cursor--; redraw() }
+					if cursor > 0 {
+						cursor--
+						redraw()
+					}
 
 				case 'H': // Home
-					cursor = 0; redraw()
+					cursor = 0
+					redraw()
 
 				case 'F': // End
-					cursor = len(buf); redraw()
+					cursor = len(buf)
+					redraw()
 
 				case '3': // Delete key (ESC [ 3 ~)
 					if n >= 4 && b[3] == '~' && cursor < len(buf) {
@@ -197,9 +214,15 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 					}
 
 				case '1': // ESC [ 1 ~ = Home
-					if n >= 4 && b[3] == '~' { cursor = 0; redraw() }
+					if n >= 4 && b[3] == '~' {
+						cursor = 0
+						redraw()
+					}
 				case '4': // ESC [ 4 ~ = End
-					if n >= 4 && b[3] == '~' { cursor = len(buf); redraw() }
+					if n >= 4 && b[3] == '~' {
+						cursor = len(buf)
+						redraw()
+					}
 				}
 			}
 			continue
@@ -219,21 +242,30 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 			}
 
 		case 0x01: // Ctrl-A — home
-			cursor = 0; redraw()
+			cursor = 0
+			redraw()
 
 		case 0x05: // Ctrl-E — end
-			cursor = len(buf); redraw()
+			cursor = len(buf)
+			redraw()
 
 		case 0x0b: // Ctrl-K — kill to end
-			buf = buf[:cursor]; redraw()
+			buf = buf[:cursor]
+			redraw()
 
 		case 0x15: // Ctrl-U — kill whole line
-			buf = buf[:0]; cursor = 0; redraw()
+			buf = buf[:0]
+			cursor = 0
+			redraw()
 
 		case 0x17: // Ctrl-W — delete prev word
 			end := cursor
-			for cursor > 0 && buf[cursor-1] == ' ' { cursor-- }
-			for cursor > 0 && buf[cursor-1] != ' ' { cursor-- }
+			for cursor > 0 && buf[cursor-1] == ' ' {
+				cursor--
+			}
+			for cursor > 0 && buf[cursor-1] != ' ' {
+				cursor--
+			}
 			buf = append(buf[:cursor], buf[end:]...)
 			redraw()
 
@@ -252,7 +284,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 
 		case 0x03: // Ctrl-C — cancel line
 			fmt.Print("^C\r\n")
-			buf = buf[:0]; cursor = 0; histIdx = -1
+			buf = buf[:0]
+			cursor = 0
+			histIdx = -1
 			fmt.Print(prompt)
 
 		case 0x09: // Tab — completion
@@ -276,7 +310,9 @@ func (sh *Shell) Readline(prompt string) (string, bool) {
 				fmt.Print("\r\n")
 				for i, o := range opts {
 					fmt.Printf("  %s%s%s", ansiCyan, o, ansiReset)
-					if i < len(opts)-1 { fmt.Print("  ") }
+					if i < len(opts)-1 {
+						fmt.Print("  ")
+					}
 				}
 				fmt.Print("\r\n")
 				fmt.Print(prompt)
@@ -401,10 +437,14 @@ func spanize(s string) []span {
 	prevWasPipe := false
 
 	flush := func(isSpace bool) {
-		if cur.Len() == 0 { return }
+		if cur.Len() == 0 {
+			return
+		}
 		t := cur.String()
 		spans = append(spans, span{text: t, space: isSpace, afterPipe: prevWasPipe && !isSpace})
-		if !isSpace { prevWasPipe = (t == "|") }
+		if !isSpace {
+			prevWasPipe = (t == "|")
+		}
 		cur.Reset()
 	}
 
@@ -412,10 +452,16 @@ func spanize(s string) []span {
 		switch {
 		case inBacktick:
 			cur.WriteRune(ch)
-			if ch == '`' { inBacktick = false; flush(false) }
+			if ch == '`' {
+				inBacktick = false
+				flush(false)
+			}
 		case inQuote:
 			cur.WriteRune(ch)
-			if ch == quoteChar { inQuote = false; flush(false) }
+			if ch == quoteChar {
+				inQuote = false
+				flush(false)
+			}
 		case ch == '`':
 			flush(false)
 			inBacktick = true
@@ -471,7 +517,7 @@ func isKeyword(t string) bool {
 		"map", "set", "stack", "queue", "tuple", "matrix",
 		// New features
 		"assert", "isnull", "isnil", "isnone", "typeof",
-		"contains", "starts", "ends", "in", "not",
+		"contains", "starts", "ends",
 		"none", "undefined":
 		return true
 	}
@@ -501,19 +547,31 @@ func isSyntaxOp(t string) bool {
 		// String concat
 		".",
 		// Redirect
-		">", ">>", "<", "2>":
+		">>", "2>":
 		return true
 	}
 	return false
 }
 
 func isNumericStr(t string) bool {
-	if t == "" { return false }
+	if t == "" {
+		return false
+	}
 	dot := false
 	for i, ch := range t {
-		if i == 0 && (ch == '-' || ch == '+') { continue }
-		if ch == '.' { if dot { return false }; dot = true; continue }
-		if ch < '0' || ch > '9' { return false }
+		if i == 0 && (ch == '-' || ch == '+') {
+			continue
+		}
+		if ch == '.' {
+			if dot {
+				return false
+			}
+			dot = true
+			continue
+		}
+		if ch < '0' || ch > '9' {
+			return false
+		}
 	}
 	return true
 }
@@ -524,8 +582,8 @@ func isNumericStr(t string) bool {
 
 func (sh *Shell) completionOptions(line string, cursor int) []string {
 	prefix := line[:cursor]
-	word   := lastWord(prefix)
-	toks   := strings.Fields(prefix)
+	word := lastWord(prefix)
+	toks := strings.Fields(prefix)
 
 	// Detect context: are we at command position?
 	// Command position = first token OR token right after |
@@ -549,18 +607,25 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 	var opts []string
 	seen := map[string]bool{}
 	add := func(s string) {
-		if !seen[s] { seen[s] = true; opts = append(opts, s) }
+		if !seen[s] {
+			seen[s] = true
+			opts = append(opts, s)
+		}
 	}
 
 	// ── Variable completion: $prefix ─────────────────────────────────────
 	if strings.HasPrefix(word, "$") {
 		pfx := word[1:]
 		for k := range sh.vars {
-			if strings.HasPrefix(k, pfx) { add("$" + k) }
+			if strings.HasPrefix(k, pfx) {
+				add("$" + k)
+			}
 		}
 		// Always suggest specials
-		for _, sv := range []string{"_return","_error","_args","_argc","_i","?"} {
-			if strings.HasPrefix(sv, pfx) { add("$"+sv) }
+		for _, sv := range []string{"_return", "_error", "_args", "_argc", "_i", "?"} {
+			if strings.HasPrefix(sv, pfx) {
+				add("$" + sv)
+			}
 		}
 		return sorted(opts)
 	}
@@ -569,19 +634,27 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 	if isCmd {
 		// Built-in commands
 		for _, b := range allBuiltinNames() {
-			if strings.HasPrefix(b, word) { add(b) }
+			if strings.HasPrefix(b, word) {
+				add(b)
+			}
 		}
 		// User-defined functions
 		for name := range sh.funcs {
-			if strings.HasPrefix(name, word) { add(name) }
+			if strings.HasPrefix(name, word) {
+				add(name)
+			}
 		}
 		// Aliases
 		for name := range sh.aliases {
-			if strings.HasPrefix(name, word) { add(name) }
+			if strings.HasPrefix(name, word) {
+				add(name)
+			}
 		}
 		// PATH executables (only first 200 to keep it fast)
 		if word != "" && len(word) >= 2 {
-			for _, p := range pathExecutables(word, 80) { add(p) }
+			for _, p := range pathExecutables(word, 80) {
+				add(p)
+			}
 		}
 		return sorted(opts)
 	}
@@ -590,7 +663,7 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 	dir := sh.cwd
 	filePfx := word
 	if idx := strings.LastIndex(word, "/"); idx >= 0 {
-		dir     = resolvePath(sh.cwd, word[:idx+1])
+		dir = resolvePath(sh.cwd, word[:idx+1])
 		filePfx = word[idx+1:]
 	}
 	entries, err := os.ReadDir(dir)
@@ -599,7 +672,9 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 			name := e.Name()
 			if strings.HasPrefix(name, filePfx) {
 				base := word[:len(word)-len(filePfx)]
-				if e.IsDir() { name += "/" }
+				if e.IsDir() {
+					name += "/"
+				}
 				add(base + name)
 			}
 		}
@@ -608,7 +683,9 @@ func (sh *Shell) completionOptions(line string, cursor int) []string {
 	// Box key completion after "box get/show/drop/tag/rm"
 	if len(toks) >= 2 && toks[0] == "box" {
 		for _, k := range sh.box.Keys() {
-			if strings.HasPrefix(k, word) { add(k) }
+			if strings.HasPrefix(k, word) {
+				add(k)
+			}
 		}
 	}
 
@@ -621,13 +698,17 @@ func pathExecutables(prefix string, max int) []string {
 	seen := map[string]bool{}
 	for _, dir := range strings.Split(os.Getenv("PATH"), ":") {
 		entries, err := os.ReadDir(dir)
-		if err != nil { continue }
+		if err != nil {
+			continue
+		}
 		for _, e := range entries {
 			n := e.Name()
 			if strings.HasPrefix(n, prefix) && !seen[n] {
 				seen[n] = true
 				results = append(results, n)
-				if len(results) >= max { return results }
+				if len(results) >= max {
+					return results
+				}
 			}
 		}
 	}
@@ -646,112 +727,115 @@ func sorted(opts []string) []string {
 }
 
 func lastWord(s string) string {
-	if strings.HasSuffix(s, " ") { return "" }
+	if strings.HasSuffix(s, " ") {
+		return ""
+	}
 	parts := strings.Fields(s)
-	if len(parts) == 0 { return "" }
+	if len(parts) == 0 {
+		return ""
+	}
 	return parts[len(parts)-1]
 }
 
 func allBuiltinNames() []string {
 	return []string{
 		// ── Navigation ──────────────────────────────────────────────────────
-		"cd","pwd","pushd","popd","dirs",
+		"cd", "pwd", "pushd", "popd", "dirs",
 		// ── Listing ─────────────────────────────────────────────────────────
-		"ls","ll","la","tree","du","df",
+		"ls", "ll", "la", "tree", "du", "df",
 		// ── File operations ─────────────────────────────────────────────────
-		"cat","head","tail","touch","mkdir","rmdir","rm","cp","mv","ln",
-		"readlink","realpath","basename","dirname","mktemp","mkfifo",
+		"cat", "head", "tail", "touch", "mkdir", "rmdir", "rm", "cp", "mv", "ln",
+		"readlink", "realpath", "basename", "dirname", "mktemp", "mkfifo",
 		// ── Inspection ───────────────────────────────────────────────────────
-		"wc","stat","file","find","diff",
+		"wc", "stat", "file", "find", "diff",
 		// ── Text processing ──────────────────────────────────────────────────
-		"grep","sed","awk","cut","tr","sort","uniq","tee","split","xargs",
-		"nl","fold","expand","unexpand","column","paste","join","comm","shuf",
-		"numfmt","rev","strings","xxd","od",
+		"grep", "sed", "awk", "cut", "tr", "sort", "uniq", "tee", "split", "xargs",
+		"nl", "fold", "expand", "unexpand", "column", "paste", "join", "comm", "shuf",
+		"numfmt", "rev", "strings", "xxd", "od",
 		// ── Permissions ──────────────────────────────────────────────────────
-		"chmod","chown",
+		"chmod", "chown",
 		// ── Process management ───────────────────────────────────────────────
-		"ps","kill","sleep","jobs","nice","timeout","pgrep","pkill","nohup",
-		"bg","fg","top","lsof","vmstat","iostat",
+		"ps", "kill", "sleep", "jobs", "nice", "timeout", "pgrep", "pkill", "nohup",
+		"bg", "fg", "top", "lsof", "vmstat", "iostat",
 		// ── System info ──────────────────────────────────────────────────────
-		"uname","uptime","date","cal","hostname","whoami","id","groups","who","w",
-		"free","lscpu","lsusb","lspci","dmesg","lsblk","mount","umount",
-		"fdisk","blkid","journalctl","systemctl","service",
+		"uname", "uptime", "date", "cal", "hostname", "whoami", "id", "groups", "who", "w",
+		"free", "lscpu", "lsusb", "lspci", "dmesg", "lsblk", "mount", "umount",
+		"fdisk", "blkid", "journalctl", "systemctl", "service",
 		// ── Networking ───────────────────────────────────────────────────────
-		"ping","curl","wget","nslookup","dig","ifconfig","ip",
-		"ss","netstat","traceroute","tracert","mtr","openssl",
-		"ssh","scp","rsync","httpget","httppost","jq",
+		"ping", "curl", "wget", "nslookup", "dig", "ifconfig", "ip",
+		"ss", "netstat", "traceroute", "tracert", "mtr", "openssl",
+		"ssh", "scp", "rsync", "httpget", "httppost", "jq",
 		// ── Hashing / archives ───────────────────────────────────────────────
-		"md5sum","md5","sha1sum","sha1","sha256sum","sha256",
-		"tar","gzip","gunzip","zip","unzip",
+		"md5sum", "md5", "sha1sum", "sha1", "sha256sum", "sha256",
+		"tar", "gzip", "gunzip", "zip", "unzip",
 		// ── Text generation / math ───────────────────────────────────────────
-		"echo","printf","yes","seq","base64","bc","factor","random",
+		"echo", "printf", "yes", "seq", "base64", "bc", "factor", "random",
 		// ── Variables / env ──────────────────────────────────────────────────
-		"set","unset","vars","export","import","env","printenv",
-		"readonly","declare","typeset","getopts",
+		"set", "unset", "vars", "export", "import", "env", "printenv",
+		"readonly", "declare", "typeset", "getopts",
 		// ── Identification ────────────────────────────────────────────────────
-		"alias","unalias","aliases","which","type",
+		"alias", "unalias", "aliases", "which", "type",
 		// ── Scripting helpers ─────────────────────────────────────────────────
-		"eval","exec","test","[","read","mapfile","readarray","source",".",
-		"true","false","pass","local","break","continue","return",
+		"eval", "exec", "test", "[", "read", "mapfile", "readarray", "source", ".",
+		"true", "false", "pass", "local", "break", "continue", "return",
 		// ── Shell passthrough ─────────────────────────────────────────────────
-		"run","shell","capture","bash","zsh","sh","fish","ksh","dash",
+		"run", "shell", "capture", "bash", "zsh", "sh", "fish", "ksh", "dash",
 		// ── Session ───────────────────────────────────────────────────────────
-		"box","history","clear","help","man","watch","exit","quit",
+		"box", "history", "clear", "help", "man", "watch", "exit", "quit",
 		// ── Fun / visual ──────────────────────────────────────────────────────
-		"figlet","toilet","lolcat","banner2","drawbox","notify",
+		"figlet", "toilet", "lolcat", "banner2", "drawbox", "notify",
 		// ── Scripting keywords ────────────────────────────────────────────────
-		"if","elif","else","fi",
-		"for","while","do","done","until",
-		"in","range",
-		"func","return",
-		"match","case","default","switch","fallthrough",
-		"unless","when",
-		"try","catch","finally","throw","raise",
+		"if", "elif", "else", "fi",
+		"for", "while", "do", "done", "until",
+		"in", "range",
+		"func", "return",
+		"match", "case", "default", "switch", "fallthrough",
+		"unless", "when",
+		"try", "catch", "finally", "throw", "raise",
 		"repeat",
-		"enum","struct",
-		"defer","with",
-		"goto","label",
-		"and","or","not",
-		"null","nil",
-		"print","println",
+		"enum", "struct",
+		"defer", "with",
+		"goto", "label",
+		"and", "or", "not",
+		"null", "nil",
+		"print", "println",
 		// ── String operations (pipe ops + standalone) ──────────────────────
-		"upper","lower","title",
-		"trim","ltrim","rtrim","strip",
-		"len","reverse","replace","replace1",
-		"sub","sub_n","pad","lpad","center",
-		"startswith","endswith","contains",
-		"isnum","isalpha","isalnum","isspace","isupper","islower",
-		"lines","words","chars","concat","prepend",
+		"upper", "lower", "title",
+		"trim", "ltrim", "rtrim", "strip",
+		"len", "reverse", "replace", "replace1",
+		"sub", "sub_n", "pad", "lpad", "center",
+		"startswith", "endswith", "contains",
+		"isnum", "isalpha", "isalnum", "isspace", "isupper", "islower",
+		"lines", "words", "chars", "concat", "prepend",
 		// ── Array operations ──────────────────────────────────────────────────
-		"first","last","nth","slice","push","pop","flatten",
-		"arr_uniq","arr_sort","arr_reverse","arr_len","arr_join",
-		"arr_contains","arr_map","arr_filter",
-		"arr_sum","arr_min","arr_max","arr_avg",
+		"first", "last", "nth", "slice", "push", "pop", "flatten",
+		"arr_uniq", "arr_sort", "arr_reverse", "arr_len", "arr_join",
+		"arr_contains", "arr_map", "arr_filter",
+		"arr_sum", "arr_min", "arr_max", "arr_avg",
 		// ── Number operations ─────────────────────────────────────────────────
-		"add","mul","div","mod","pow",
-		"abs","ceil","floor","round","sqrt","negate",
-		"hex","oct","bin",
-		"tonum","tostr","toarray",
+		"add", "mul", "div", "mod", "pow",
+		"abs", "ceil", "floor", "round", "sqrt", "negate",
+		"hex", "oct", "bin",
+		"tonum", "tostr", "toarray",
 		// ── Type inspection ───────────────────────────────────────────────────
-		"typeof","dt_show",
+		"typeof", "dt_show",
 		// ── Map commands ──────────────────────────────────────────────────────
-		"map_new","map_set","map_get","map_del","map_has",
-		"map_keys","map_values","map_len","map_show","map_merge",
+		"map_new", "map_set", "map_get", "map_del", "map_has",
+		"map_keys", "map_values", "map_len", "map_show", "map_merge",
 		// ── Set commands ──────────────────────────────────────────────────────
-		"set_new","set_add","set_remove","set_has",
-		"set_union","set_intersect","set_diff","set_show","set_len",
+		"set_new", "set_add", "set_remove", "set_has",
+		"set_union", "set_intersect", "set_diff", "set_show", "set_len",
 		// ── Stack commands ────────────────────────────────────────────────────
-		"stack_new","stack_push","stack_pop","stack_peek","stack_len","stack_show",
+		"stack_new", "stack_push", "stack_pop", "stack_peek", "stack_len", "stack_show",
 		// ── Queue commands ────────────────────────────────────────────────────
-		"queue_new","enqueue","dequeue","queue_peek","queue_len","queue_show",
+		"queue_new", "enqueue", "dequeue", "queue_peek", "queue_len", "queue_show",
 		// ── Tuple commands ────────────────────────────────────────────────────
-		"tuple_get","tuple_len","tuple_show",
+		"tuple_get", "tuple_len", "tuple_show",
 		// ── Matrix commands ───────────────────────────────────────────────────
-		"matrix_new","matrix_get","matrix_set","matrix_add","matrix_mul",
-		"matrix_transpose","matrix_det","matrix_show","matrix_identity",
+		"matrix_new", "matrix_get", "matrix_set", "matrix_add", "matrix_mul",
+		"matrix_transpose", "matrix_det", "matrix_show", "matrix_identity",
 	}
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Visual width helpers
@@ -762,8 +846,16 @@ func visibleLen(s string) int {
 	n := 0
 	esc := false
 	for _, ch := range s {
-		if esc { if ch == 'm' { esc = false }; continue }
-		if ch == '\033' { esc = true; continue }
+		if esc {
+			if ch == 'm' {
+				esc = false
+			}
+			continue
+		}
+		if ch == '\033' {
+			esc = true
+			continue
+		}
 		n++
 	}
 	return n

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strconv"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -43,8 +43,6 @@ func waitBgJob(job *BgJob) (string, error) {
 	<-job.Done
 	return job.Result, job.Err
 }
-
-
 
 type HistoryEntry struct {
 	Raw      string    `json:"raw"`
@@ -96,10 +94,10 @@ func NewShell() *Shell {
 		cwd = "/"
 	}
 	sh := &Shell{
-		cwd:     cwd,
-		box:     NewBox(),
-		aliases: make(map[string]Alias),
-		vars:    make(map[string]string),
+		cwd:          cwd,
+		box:          NewBox(),
+		aliases:      make(map[string]Alias),
+		vars:         make(map[string]string),
 		funcs:        make(map[string]*UserFunc),
 		readonlyVars: make(map[string]bool),
 		arrays:       make(map[string]*ShArray),
@@ -117,7 +115,9 @@ func (sh *Shell) Run() {
 
 	execAndRecord := func(raw string) {
 		raw = strings.TrimSpace(raw)
-		if raw == "" { return }
+		if raw == "" {
+			return
+		}
 		sh.history = append(sh.history, HistoryEntry{Raw: raw, At: time.Now()})
 		code := sh.execLine(raw)
 		sh.lastCode = code
@@ -131,7 +131,9 @@ func (sh *Shell) Run() {
 			line := sh.pasteQueue[0]
 			sh.pasteQueue = sh.pasteQueue[1:]
 			line = strings.TrimSpace(line)
-			if line == "" { continue }
+			if line == "" {
+				continue
+			}
 			// Echo the line so the user can see what's being executed
 			prompt := renderPrompt(sh.cwd, os.Getenv("USER"), sh.lastCode)
 			fmt.Printf("%s%s%s\n", prompt, line, ansiReset)
@@ -140,7 +142,9 @@ func (sh *Shell) Run() {
 
 		prompt := renderPrompt(sh.cwd, os.Getenv("USER"), sh.lastCode)
 		line, eof := sh.Readline(prompt)
-		if eof { break }
+		if eof {
+			break
+		}
 
 		execAndRecord(line)
 	}
@@ -154,31 +158,35 @@ func (sh *Shell) Run() {
 
 func (sh *Shell) execLine(raw string) int {
 	raw = strings.TrimSpace(raw)
-	if raw == "" { return 0 }
+	if raw == "" {
+		return 0
+	}
 
 	// Track current source for error reporting
-	if sh.currentSrc == "" { sh.currentSrc = raw }
+	if sh.currentSrc == "" {
+		sh.currentSrc = raw
+	}
 
 	rawLow := strings.ToLower(raw)
 
 	// ── Control-flow keywords typed at the REPL top-level ────────────────
 	switch {
 	case rawLow == "return" || (strings.HasPrefix(rawLow, "return ") && !strings.Contains(raw, "{")):
-		PrintError(&ShellError{Code:"E002", Kind:"SyntaxError",
+		PrintError(&ShellError{Code: "E002", Kind: "SyntaxError",
 			Message: "'return' can only be used inside a function body",
-			Source: raw, Col: 0, Span: 6, Line: sh.currentLine,
+			Source:  raw, Col: 0, Span: 6, Line: sh.currentLine,
 			Hint: "define a function:  func myFunc() { ... return $val }"})
 		return 1
 	case rawLow == "break":
-		PrintError(&ShellError{Code:"E002", Kind:"SyntaxError",
+		PrintError(&ShellError{Code: "E002", Kind: "SyntaxError",
 			Message: "'break' can only be used inside a loop body",
-			Source: raw, Col: 0, Span: 5, Line: sh.currentLine,
+			Source:  raw, Col: 0, Span: 5, Line: sh.currentLine,
 			Hint: "use 'break' inside a for/while loop"})
 		return 1
 	case rawLow == "continue":
-		PrintError(&ShellError{Code:"E002", Kind:"SyntaxError",
+		PrintError(&ShellError{Code: "E002", Kind: "SyntaxError",
 			Message: "'continue' can only be used inside a loop body",
-			Source: raw, Col: 0, Span: 8, Line: sh.currentLine,
+			Source:  raw, Col: 0, Span: 8, Line: sh.currentLine,
 			Hint: "use 'continue' inside a for/while loop"})
 		return 1
 	}
@@ -219,19 +227,25 @@ func (sh *Shell) execLine(raw string) int {
 	}
 
 	// ── Passthrough prefixes (bash! zsh! run etc.) ────────────────────────
-	if code, handled := sh.tryPassthrough(raw); handled { return code }
+	if code, handled := sh.tryPassthrough(raw); handled {
+		return code
+	}
 
 	// ── Scripting engine (if/for/while/func/variables etc.) ───────────────
-	if handled, code := sh.evalScript(raw); handled { return code }
+	if handled, code := sh.evalScript(raw); handled {
+		return code
+	}
 
 	// ── Standard command path ─────────────────────────────────────────────
 	raw = sh.expandAliases(raw)
 	raw = sh.expandVars(raw)
-	pc  := Parse(raw)
-	if len(pc.Args) == 0 { return 0 }
+	pc := Parse(raw)
+	if len(pc.Args) == 0 {
+		return 0
+	}
 
 	command := pc.Args[0]
-	args    := pc.Args[1:]
+	args := pc.Args[1:]
 
 	// ── Literal value pipe: "hello" | upper  /  42 | add 8 ──────────────
 	if command == "__literal__" && len(args) > 0 {
@@ -243,27 +257,52 @@ func (sh *Shell) execLine(raw string) int {
 		} else {
 			result = NewTyped(litRaw, "number")
 		}
-		if len(pc.Pipes) == 0 { sh.printResult(result); return 0 }
+		if len(pc.Pipes) == 0 {
+			sh.printResult(result)
+			return 0
+		}
 		var err error
-		result, err = ApplyPipes(result, pc.Pipes, sh)
-		if err != nil { sh.printErr(wrapErr(err, strings.Join(pc.Args, " "))); return 1 }
+		result, err = ApplyPipes(result, pc.Pipes)
+		if err != nil {
+			sh.printErr(wrapErr(err, strings.Join(pc.Args, " ")))
+			return 1
+		}
 		sh.printResult(result)
-		if pc.ShouldStore && result != nil { sh.storeResult(pc, "literal", result) }
+		if pc.ShouldStore && result != nil {
+			sh.storeResult(pc, "literal", result)
+		}
 		return 0
 	}
 
 	// ── Built-ins ─────────────────────────────────────────────────────────
 	result, wasBuiltin, err := handleBuiltin(sh, command, args)
-	if err == errExit { sh.saveHistory(); fmt.Println(c(ansiGrey, "bye.")); os.Exit(0) }
-	if err == errClear { cmd := exec.Command("clear"); cmd.Stdout = os.Stdout; _ = cmd.Run(); return 0 }
+	if err == errExit {
+		sh.saveHistory()
+		fmt.Println(c(ansiGrey, "bye."))
+		os.Exit(0)
+	}
+	if err == errClear {
+		cmd := exec.Command("clear")
+		cmd.Stdout = os.Stdout
+		_ = cmd.Run()
+		return 0
+	}
 	if wasBuiltin {
-		if err != nil { sh.printErr(wrapErr(err, raw)); return 1 }
+		if err != nil {
+			sh.printErr(wrapErr(err, raw))
+			return 1
+		}
 		if result != nil && (result.IsTable || strings.TrimSpace(result.Text) != "") {
-			result, err = ApplyPipes(result, pc.Pipes, sh)
-			if err != nil { sh.printErr(wrapErr(err, raw)); return 1 }
+			result, err = ApplyPipes(result, pc.Pipes)
+			if err != nil {
+				sh.printErr(wrapErr(err, raw))
+				return 1
+			}
 			sh.printResult(result)
 		}
-		if pc.ShouldStore && result != nil { sh.storeResult(pc, command, result) }
+		if pc.ShouldStore && result != nil {
+			sh.storeResult(pc, command, result)
+		}
 		return 0
 	}
 
@@ -271,11 +310,11 @@ func (sh *Shell) execLine(raw string) int {
 	if fn, ok := sh.funcs[command]; ok {
 		sh.vars["_return"] = "" // clear before call
 		code := sh.callUserFunc(fn, args, raw)
-		ret  := sh.vars["_return"]
+		ret := sh.vars["_return"]
 		if code == 0 {
 			if len(pc.Pipes) > 0 && ret != "" {
 				result = NewTyped(ret, KindString)
-				result, _ = ApplyPipes(result, pc.Pipes, sh)
+				result, _ = ApplyPipes(result, pc.Pipes)
 				sh.printResult(result)
 			} else if ret != "" && sh.currentFile == "" {
 				// At the interactive REPL (no script file), print return value
@@ -286,7 +325,9 @@ func (sh *Shell) execLine(raw string) int {
 	}
 
 	// ── Interactive/TUI commands — auto passthrough ───────────────────────
-	if needsPassthrough(command) { return RunPassthroughArgs(command, args, sh.cwd) }
+	if needsPassthrough(command) {
+		return RunPassthroughArgs(command, args, sh.cwd)
+	}
 
 	// ── External command not in PATH ──────────────────────────────────────
 	if findInPath(command) == "" {
@@ -295,16 +336,25 @@ func (sh *Shell) execLine(raw string) int {
 	}
 
 	// ── External command in PATH ──────────────────────────────────────────
-	if len(pc.Pipes) == 0 { return RunPassthroughArgs(command, args, sh.cwd) }
+	if len(pc.Pipes) == 0 {
+		return RunPassthroughArgs(command, args, sh.cwd)
+	}
 	result, err = RunExternal(command, args, sh.cwd)
-	if err != nil { sh.printErr(wrapErr(err, raw)); return 1 }
-	result, err = ApplyPipes(result, pc.Pipes, sh)
-	if err != nil { sh.printErr(wrapErr(err, raw)); return 1 }
+	if err != nil {
+		sh.printErr(wrapErr(err, raw))
+		return 1
+	}
+	result, err = ApplyPipes(result, pc.Pipes)
+	if err != nil {
+		sh.printErr(wrapErr(err, raw))
+		return 1
+	}
 	sh.printResult(result)
-	if pc.ShouldStore { sh.storeResult(pc, command, result) }
+	if pc.ShouldStore {
+		sh.storeResult(pc, command, result)
+	}
 	return 0
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Output rendering  (respects capture mode for backtick subshells)
@@ -343,13 +393,19 @@ func (sh *Shell) printResult(r *Result) {
 			items := splitArrayResult(text)
 			cols := []string{"index", "value"}
 			rows := make([]Row, len(items))
-			for i, it := range items { rows[i] = Row{"index": strconv.Itoa(i), "value": it} }
+			for i, it := range items {
+				rows[i] = Row{"index": strconv.Itoa(i), "value": it}
+			}
 			if sh.captureMode {
-				for _, it := range items { sh.captureOut.WriteString(it + "\n") }
+				for _, it := range items {
+					sh.captureOut.WriteString(it + "\n")
+				}
 				return
 			}
 			fmt.Println()
-			for _, line := range RenderTable(cols, rows) { fmt.Println(line) }
+			for _, line := range RenderTable(cols, rows) {
+				fmt.Println(line)
+			}
 			fmt.Println()
 			return
 		}
@@ -506,13 +562,14 @@ func (sh *Shell) expandVars(raw string) string {
 // Returns (exitCode, true) if matched; (0, false) if not a passthrough command.
 //
 // Syntax summary:
-//   bash! git log | grep fix          explicit bash — rest of line is the cmd
-//   zsh!  print -P "%F{red}hi%f"      explicit zsh
-//   sh!   for f in *.go; do wc $f; done
-//   run   git log | grep fix          uses $SHELL or bash
-//   !     git log | grep fix          bare ! prefix (same as run)
-//   bash                              bare name → interactive session
-//   zsh                               bare name → interactive session
+//
+//	bash! git log | grep fix          explicit bash — rest of line is the cmd
+//	zsh!  print -P "%F{red}hi%f"      explicit zsh
+//	sh!   for f in *.go; do wc $f; done
+//	run   git log | grep fix          uses $SHELL or bash
+//	!     git log | grep fix          bare ! prefix (same as run)
+//	bash                              bare name → interactive session
+//	zsh                               bare name → interactive session
 func (sh *Shell) tryPassthrough(raw string) (int, bool) {
 	trimmed := strings.TrimSpace(raw)
 
@@ -578,22 +635,47 @@ func (sh *Shell) tryPassthrough(raw string) (int, bool) {
 
 // hasPipeOutsideQuotes returns true if s contains a | outside any quotes.
 func hasPipeOutsideQuotes(s string) bool {
-	inQ := false; qCh := rune(0)
+	inQ := false
+	qCh := rune(0)
 	for _, ch := range s {
-		if inQ { if ch == qCh { inQ = false }; continue }
-		if ch == '"' || ch == '\'' { inQ = true; qCh = ch; continue }
-		if ch == '|' { return true }
+		if inQ {
+			if ch == qCh {
+				inQ = false
+			}
+			continue
+		}
+		if ch == '"' || ch == '\'' {
+			inQ = true
+			qCh = ch
+			continue
+		}
+		if ch == '|' {
+			return true
+		}
 	}
 	return false
 }
 
 // countPipesOutsideQuotes counts | characters outside quotes.
 func countPipesOutsideQuotes(s string) int {
-	n := 0; inQ := false; qCh := rune(0)
+	n := 0
+	inQ := false
+	qCh := rune(0)
 	for _, ch := range s {
-		if inQ { if ch == qCh { inQ = false }; continue }
-		if ch == '"' || ch == '\'' { inQ = true; qCh = ch; continue }
-		if ch == '|' { n++ }
+		if inQ {
+			if ch == qCh {
+				inQ = false
+			}
+			continue
+		}
+		if ch == '"' || ch == '\'' {
+			inQ = true
+			qCh = ch
+			continue
+		}
+		if ch == '|' {
+			n++
+		}
 	}
 	return n
 }
@@ -603,15 +685,25 @@ func countPipesOutsideQuotes(s string) int {
 // Returns false if any segment is an external OS command (route to shell).
 func isKatshPipeLine(raw string, sh *Shell) bool {
 	segments := splitOnPipes(raw)
-	if len(segments) < 2 { return true } // no pipe at all — katsh handles
+	if len(segments) < 2 {
+		return true
+	} // no pipe at all — katsh handles
 	for _, seg := range segments[1:] {
 		fields := strings.Fields(strings.TrimSpace(seg))
-		if len(fields) == 0 { continue }
+		if len(fields) == 0 {
+			continue
+		}
 		op := strings.ToLower(fields[0])
-		if isKatshPipeOp(op) { continue }
-		if isStringOp(op) { continue }
+		if isKatshPipeOp(op) {
+			continue
+		}
+		if isStringOp(op) {
+			continue
+		}
 		if sh != nil {
-			if _, ok := sh.funcs[op]; ok { continue }
+			if _, ok := sh.funcs[op]; ok {
+				continue
+			}
 		}
 		return false // this segment is an OS command → route everything to shell
 	}
@@ -622,9 +714,9 @@ func isKatshPipeLine(raw string, sh *Shell) bool {
 // constructs — these need $() expansion done inline by katsh (not the OS shell).
 func isKatshScriptStart(cmd string) bool {
 	switch cmd {
-	case "if","unless","for","while","until","func","match","try","switch",
-		"enum","struct","defer","with","when","repeat","do","echo","println",
-		"print","let","set","export","readonly","unset","source","alias":
+	case "if", "unless", "for", "while", "until", "func", "match", "try", "switch",
+		"enum", "struct", "defer", "with", "when", "repeat", "do", "echo", "println",
+		"print", "let", "set", "export", "readonly", "unset", "source", "alias":
 		return true
 	}
 	return false
@@ -636,8 +728,14 @@ func looksLikeOSPipe(raw string) bool { return !isKatshPipeLine(raw, nil) }
 // allKatshPipes is kept for compatibility.
 func allKatshPipes(pipes []PipeStage, sh *Shell) bool {
 	for _, p := range pipes {
-		if isKatshPipeOp(p.Op) || isStringOp(p.Op) { continue }
-		if sh != nil { if _, ok := sh.funcs[p.Op]; ok { continue } }
+		if isKatshPipeOp(p.Op) || isStringOp(p.Op) {
+			continue
+		}
+		if sh != nil {
+			if _, ok := sh.funcs[p.Op]; ok {
+				continue
+			}
+		}
 		return false
 	}
 	return true
@@ -646,15 +744,14 @@ func allKatshPipes(pipes []PipeStage, sh *Shell) bool {
 // isKatshPipeOp returns true for built-in katsh pipe operators.
 func isKatshPipeOp(op string) bool {
 	switch op {
-	case "select","cols","where","filter","grep","search",
-		"sort","orderby","order","limit","head","top",
-		"skip","offset","tail","count","unique","distinct",
-		"reverse","fmt","format","add","addcol","rename","renamecol":
+	case "select", "cols", "where", "filter", "grep", "search",
+		"sort", "orderby", "order", "limit", "head", "top",
+		"skip", "offset", "tail", "count", "unique", "distinct",
+		"reverse", "fmt", "format", "add", "addcol", "rename", "renamecol":
 		return true
 	}
 	return isStringOp(op)
 }
-
 
 // shellExpand expands $VAR and $() in a string before passing to the OS shell.
 func (sh *Shell) shellExpand(s string) string {
@@ -670,7 +767,7 @@ func (sh *Shell) shellExpand(s string) string {
 func (sh *Shell) expandDollarParens(s string) string {
 	// ── First pass: launch ?(cmd) goroutines in parallel ─────────────────
 	type bgSlot struct {
-		start, end int    // byte offsets in original s
+		start, end int // byte offsets in original s
 		job        *BgJob
 	}
 	var bgSlots []bgSlot
@@ -682,16 +779,26 @@ func (sh *Shell) expandDollarParens(s string) string {
 		depth, end := 0, -1
 		for j := i + 2; j < len(s); j++ {
 			switch s[j] {
-			case '(':  depth++
+			case '(':
+				depth++
 			case ')':
-				if depth == 0 { end = j } else { depth-- }
+				if depth == 0 {
+					end = j
+				} else {
+					depth--
+				}
 			}
-			if end >= 0 { break }
+			if end >= 0 {
+				break
+			}
 		}
-		if end < 0 { i++; continue }
+		if end < 0 {
+			i++
+			continue
+		}
 		inner := strings.TrimSpace(s[i+2 : end])
-		inner  = sh.expandVars(inner)
-		job    := runBgJob(inner, sh.cwd)
+		inner = sh.expandVars(inner)
+		job := runBgJob(inner, sh.cwd)
 		bgSlots = append(bgSlots, bgSlot{i, end, job})
 		i = end + 1 // skip past this ?(...)
 	}
@@ -717,20 +824,31 @@ func (sh *Shell) expandDollarParens(s string) string {
 	// ── Second pass: expand $(...) inline (iterative, handles nesting) ───
 	for {
 		start := strings.Index(s, "$(")
-		if start < 0 { break }
+		if start < 0 {
+			break
+		}
 		depth, end := 0, -1
 		for i := start + 2; i < len(s); i++ {
 			switch s[i] {
-			case '(': depth++
+			case '(':
+				depth++
 			case ')':
-				if depth == 0 { end = i } else { depth-- }
+				if depth == 0 {
+					end = i
+				} else {
+					depth--
+				}
 			}
-			if end >= 0 { break }
+			if end >= 0 {
+				break
+			}
 		}
-		if end < 0 { break }
+		if end < 0 {
+			break
+		}
 		inner := s[start+2 : end]
-		inner  = sh.expandDollarParens(inner)
-		inner  = sh.expandVars(inner)
+		inner = sh.expandDollarParens(inner)
+		inner = sh.expandVars(inner)
 		out, _ := RunCaptureShell("", inner, sh.cwd)
 		s = s[:start] + strings.TrimRight(out, "\n ") + s[end+1:]
 	}
@@ -748,7 +866,6 @@ func stripOuterQuotes(s string) string {
 	}
 	return s
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  History persistence

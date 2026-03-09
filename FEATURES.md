@@ -821,8 +821,8 @@ KatSH shows rich, located error messages with source highlighting:
   SyntaxError[E002] at line 12, col 5  unexpected token '}'
   ╭─ line 12
   │  if $x > 10 }
-  │       ~~~~~~
-  │       ^── here
+  │     ~~~~~~~
+  │     ^── here
   │
   ╰─ 💡 hint: missing opening '{' before this '}'
      fix :  if $x > 10 { ... }
