@@ -9,7 +9,7 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Katsh — 10 new scripting features
+//  StructSH — 10 new scripting features
 //
 //  1.  return values from functions  — result = add(3, 4)
 //  2.  switch statement              — switch $x { "a": ... "b": ... }
@@ -61,16 +61,10 @@ func (sh *Shell) callUserFuncReturning(fn *UserFunc, args []string, src string) 
 
 	for _, line := range fn.Body {
 		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
+		if line == "" { continue }
 		code := sh.execLine(line)
-		if code == codeReturn {
-			break
-		}
-		if code != 0 && code != codeBreak && code != codeContinue {
-			break
-		}
+		if code == codeReturn { break }
+		if code != 0 && code != codeBreak && code != codeContinue { break }
 	}
 
 	retVal := sh.vars["_return"]
@@ -87,37 +81,25 @@ func (sh *Shell) callUserFuncReturning(fn *UserFunc, args []string, src string) 
 func (sh *Shell) tryFuncCallAssign(raw string) (string, bool) {
 	// Must have = sign
 	eqIdx := strings.Index(raw, "=")
-	if eqIdx <= 0 {
-		return "", false
-	}
-	if eqIdx > 0 && (raw[eqIdx-1] == '!' || raw[eqIdx-1] == '<' || raw[eqIdx-1] == '>') {
-		return "", false
-	}
-	if eqIdx+1 < len(raw) && raw[eqIdx+1] == '=' {
-		return "", false
-	}
+	if eqIdx <= 0 { return "", false }
+	if eqIdx > 0 && (raw[eqIdx-1] == '!' || raw[eqIdx-1] == '<' || raw[eqIdx-1] == '>') { return "", false }
+	if eqIdx+1 < len(raw) && raw[eqIdx+1] == '=' { return "", false }
 
 	lhs := strings.TrimSpace(raw[:eqIdx])
-	if !isIdent(lhs) {
-		return "", false
-	}
+	if !isIdent(lhs) { return "", false }
 
 	rhs := strings.TrimSpace(raw[eqIdx+1:])
 	// rhs must start with a known func name optionally followed by ( or space+args
 	firstWord := strings.FieldsFunc(rhs, func(r rune) bool { return r == '(' || r == ' ' || r == '\t' })[0]
 	fn, ok := sh.funcs[firstWord]
-	if !ok {
-		return "", false
-	}
+	if !ok { return "", false }
 
 	// Parse args: either funcName(a, b, c) or funcName a b c
 	var argStr string
 	after := strings.TrimSpace(rhs[len(firstWord):])
 	if strings.HasPrefix(after, "(") {
 		end := strings.LastIndex(after, ")")
-		if end < 0 {
-			end = len(after)
-		}
+		if end < 0 { end = len(after) }
 		argStr = after[1:end]
 	} else {
 		argStr = after
@@ -167,9 +149,7 @@ func (sh *Shell) evalSwitch(raw string) int {
 
 	val := sh.evalExpr(subject)
 	inner := body
-	if strings.HasPrefix(inner, "{") {
-		inner = inner[1 : len(inner)-1]
-	}
+	if strings.HasPrefix(inner, "{") { inner = inner[1 : len(inner)-1] }
 
 	cases := splitSemicolon(inner)
 	matched := false
@@ -188,17 +168,13 @@ func (sh *Shell) evalSwitch(raw string) int {
 			// default always runs if nothing matched
 			matched = true
 			code := sh.execBodyLines(extractBody(strings.TrimSpace(after)))
-			if code == codeBreak {
-				return 0
-			}
+			if code == codeBreak { return 0 }
 			return code
 		}
 
 		// case expr: body
 		ci := colonOutsideBraces(cl)
-		if ci < 0 {
-			continue
-		}
+		if ci < 0 { continue }
 		pattern := strings.TrimSpace(cl[:ci])
 		casebody := strings.TrimSpace(cl[ci+1:])
 
@@ -214,12 +190,8 @@ func (sh *Shell) evalSwitch(raw string) int {
 				continue
 			}
 			code := sh.execBodyLines(extractBody(casebody))
-			if code == codeBreak {
-				return 0
-			}
-			if code != 0 {
-				return code
-			}
+			if code == codeBreak { return 0 }
+			if code != 0 { return code }
 			return 0 // switch exits after first match (no implicit fallthrough)
 		}
 	}
@@ -244,24 +216,18 @@ func (sh *Shell) evalEnum(raw string) int {
 	enumName := strings.TrimSpace(rest[:spIdx])
 	body := extractBody(strings.TrimSpace(rest[spIdx:]))
 	inner := body
-	if strings.HasPrefix(inner, "{") {
-		inner = inner[1 : len(inner)-1]
-	}
+	if strings.HasPrefix(inner, "{") { inner = inner[1 : len(inner)-1] }
 
 	var members []string
 	counter := 0
 	for _, tok := range strings.Fields(inner) {
 		tok = strings.TrimSpace(tok)
-		if tok == "" {
-			continue
-		}
+		if tok == "" { continue }
 		if idx := strings.Index(tok, "="); idx > 0 {
 			name := tok[:idx]
 			val := tok[idx+1:]
 			n, err := strconv.Atoi(val)
-			if err == nil {
-				counter = n
-			}
+			if err == nil { counter = n }
 			sh.setVar(enumName+"_"+name, strconv.Itoa(counter))
 			members = append(members, name)
 		} else {
@@ -303,16 +269,12 @@ func (sh *Shell) evalStruct(raw string) int {
 	name := strings.TrimSpace(rest[:spIdx])
 	body := extractBody(strings.TrimSpace(rest[spIdx:]))
 	inner := body
-	if strings.HasPrefix(inner, "{") {
-		inner = inner[1 : len(inner)-1]
-	}
+	if strings.HasPrefix(inner, "{") { inner = inner[1 : len(inner)-1] }
 
 	def := &StructDef{Name: name, Fields: nil, Defaults: make(map[string]string)}
 	for _, tok := range strings.Fields(inner) {
 		tok = strings.TrimSpace(tok)
-		if tok == "" {
-			continue
-		}
+		if tok == "" { continue }
 		if idx := strings.Index(tok, "="); idx > 0 {
 			field := tok[:idx]
 			defaultVal := stripQuotes(tok[idx+1:])
@@ -338,9 +300,7 @@ func (sh *Shell) evalStruct(raw string) int {
 // instantiateStruct handles:  p = Point(10, 20)  or  p = Point(x=10 y=20)
 func (sh *Shell) instantiateStruct(varName, typeName, argStr string) bool {
 	fieldList := sh.vars["__struct_"+typeName]
-	if fieldList == "" {
-		return false
-	}
+	if fieldList == "" { return false }
 
 	fields := strings.Split(fieldList, ",")
 	args := tokenizeUnquoted(argStr)
@@ -381,15 +341,11 @@ func (sh *Shell) instantiateStruct(varName, typeName, argStr string) bool {
 // Can also appear as a standalone expression:  "hello" |> upper |> echo
 
 func (sh *Shell) evalPipeExpr(raw string) (string, bool) {
-	if !strings.Contains(raw, "|>") {
-		return "", false
-	}
+	if !strings.Contains(raw, "|>") { return "", false }
 
 	// Split on |> outside quotes
 	stages := splitPipeArrow(raw)
-	if len(stages) < 2 {
-		return "", false
-	}
+	if len(stages) < 2 { return "", false }
 
 	// Evaluate first stage as an expression
 	first := strings.TrimSpace(stages[0])
@@ -406,23 +362,17 @@ func (sh *Shell) evalPipeExpr(raw string) (string, bool) {
 	for _, stage := range stages[1:] {
 		stage = strings.TrimSpace(stage)
 		parts := tokenizeUnquoted(stage)
-		if len(parts) == 0 {
-			continue
-		}
+		if len(parts) == 0 { continue }
 		op := strings.ToLower(parts[0])
 		opArgs := parts[1:]
 
 		if isStringOp(op) {
 			result, err := applyStringOp(r, op, opArgs)
 			if err != nil {
-				if se, ok := err.(*ShellError); ok {
-					PrintError(se)
-				}
+				if se, ok := err.(*ShellError); ok { PrintError(se) }
 				return r.Text, true
 			}
-			if result != nil {
-				r = result
-			}
+			if result != nil { r = result }
 		} else {
 			// Try as a user function call
 			if fn, ok := sh.funcs[op]; ok {
@@ -450,21 +400,14 @@ func splitPipeArrow(s string) []string {
 		switch {
 		case inBt:
 			cur.WriteRune(ch)
-			if ch == '`' {
-				inBt = false
-			}
+			if ch == '`' { inBt = false }
 		case inQ:
 			cur.WriteRune(ch)
-			if ch == qCh {
-				inQ = false
-			}
+			if ch == qCh { inQ = false }
 		case ch == '`':
-			inBt = true
-			cur.WriteRune(ch)
+			inBt = true; cur.WriteRune(ch)
 		case ch == '"' || ch == '\'':
-			inQ = true
-			qCh = ch
-			cur.WriteRune(ch)
+			inQ = true; qCh = ch; cur.WriteRune(ch)
 		case ch == '|' && i+1 < len(runes) && runes[i+1] == '>':
 			parts = append(parts, cur.String())
 			cur.Reset()
@@ -473,9 +416,7 @@ func splitPipeArrow(s string) []string {
 			cur.WriteRune(ch)
 		}
 	}
-	if cur.Len() > 0 {
-		parts = append(parts, cur.String())
-	}
+	if cur.Len() > 0 { parts = append(parts, cur.String()) }
 	return parts
 }
 
@@ -490,16 +431,12 @@ func splitPipeArrow(s string) []string {
 func (sh *Shell) tryWhenGuard(raw string) (int, bool) {
 	// Find " when " outside quotes
 	idx := findOutside(raw, " when ")
-	if idx < 0 {
-		return 0, false
-	}
+	if idx < 0 { return 0, false }
 
-	cmd := strings.TrimSpace(raw[:idx])
+	cmd  := strings.TrimSpace(raw[:idx])
 	cond := strings.TrimSpace(raw[idx+6:])
 
-	if !sh.evalCond(cond) {
-		return 0, true
-	}
+	if !sh.evalCond(cond) { return 0, true }
 	return sh.execLine(cmd), true
 }
 
@@ -609,16 +546,12 @@ func (sh *Shell) execBodyLinesWithGoto(body string) int {
 	for i < len(lines) {
 		line := strings.TrimSpace(lines[i])
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
-			i++
-			continue
+			i++; continue
 		}
 		low := strings.ToLower(line)
 
 		// Skip label declarations
-		if strings.HasPrefix(low, "label ") {
-			i++
-			continue
-		}
+		if strings.HasPrefix(low, "label ") { i++; continue }
 
 		// goto
 		if strings.HasPrefix(low, "goto ") {
@@ -628,17 +561,14 @@ func (sh *Shell) execBodyLinesWithGoto(body string) int {
 			if whenIdx := findOutside(rest, " when "); whenIdx >= 0 {
 				cond := strings.TrimSpace(rest[whenIdx+6:])
 				targetLabel = strings.TrimSpace(rest[:whenIdx])
-				if !sh.evalCond(cond) {
-					i++
-					continue
-				}
+				if !sh.evalCond(cond) { i++; continue }
 			}
 			idx, ok := labels[targetLabel]
 			if !ok {
 				PrintError(&ShellError{
 					Code: "E002", Kind: "SyntaxError",
 					Message: fmt.Sprintf("undefined label %q", targetLabel),
-					Source:  line, Col: 5, Span: len(targetLabel),
+					Source: line, Col: 5, Span: len(targetLabel),
 					Hint: "declare with:  label " + targetLabel + ":",
 				})
 				return 1
@@ -648,7 +578,7 @@ func (sh *Shell) execBodyLinesWithGoto(body string) int {
 				PrintError(&ShellError{
 					Code: "E004", Kind: "RuntimeError",
 					Message: "too many goto jumps (infinite loop?)",
-					Source:  line, Col: -1,
+					Source: line, Col: -1,
 					Hint: "add a break condition to your goto loop",
 				})
 				return 1
@@ -658,33 +588,20 @@ func (sh *Shell) execBodyLinesWithGoto(body string) int {
 		}
 
 		// break / continue / pass
-		if low == "break" {
-			return codeBreak
-		}
-		if low == "continue" {
-			return codeContinue
-		}
-		if low == "pass" {
-			i++
-			continue
-		}
+		if low == "break"    { return codeBreak }
+		if low == "continue" { return codeContinue }
+		if low == "pass"     { i++; continue }
 
 		// return
 		if strings.HasPrefix(low, "return") {
 			val := strings.TrimSpace(line[6:])
-			if val != "" {
-				sh.vars["_return"] = sh.evalExpr(val)
-			} // direct write, bypass readonly
+			if val != "" { sh.vars["_return"] = sh.evalExpr(val) } // direct write, bypass readonly
 			return codeReturn
 		}
 
 		code := sh.execLine(line)
-		if code == codeBreak || code == codeContinue || code == codeReturn {
-			return code
-		}
-		if code != 0 {
-			return code
-		}
+		if code == codeBreak || code == codeContinue || code == codeReturn { return code }
+		if code != 0 { return code }
 		i++
 	}
 	return 0
@@ -714,9 +631,9 @@ func (sh *Shell) evalThrow(raw string) int {
 	}
 
 	// Store in well-known vars
-	sh.vars["_error"] = msg // bypass readonly check — internal assignment
-	sh.lastErrMsg = msg
-	sh.thrownMsg = msg
+	sh.vars["_error"] = msg  // bypass readonly check — internal assignment
+	sh.lastErrMsg     = msg
+	sh.thrownMsg      = msg
 
 	// Only print the error if NOT inside a try block
 	if sh.errHandlerDepth == 0 {
@@ -747,20 +664,20 @@ func (sh *Shell) evalThrow(raw string) int {
 	return 1
 }
 
+
 // ─── Wire everything into evalScript ─────────────────────────────────────────
 
 // evalScript2 handles the 10 new constructs.
 // Called from evalScript before the original dispatch.
 func (sh *Shell) evalScript2(raw string) (bool, int) {
 	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return false, 0
-	}
+	if raw == "" { return false, 0 }
+
+	// ── First: check scripting3 new features ─────────────────────────────────
+	if handled, code := sh.evalScript3(raw); handled { return true, code }
 
 	lp := len(raw)
-	if lp > 25 {
-		lp = 25
-	}
+	if lp > 25 { lp = 25 }
 	lower := strings.ToLower(raw[:lp])
 
 	switch {
@@ -793,7 +710,7 @@ func (sh *Shell) evalScript2(raw string) (bool, int) {
 			Code: "E002", Kind: "SyntaxError",
 			Message: "goto can only be used inside a function or block body",
 			Source:  raw, Col: 0, Span: 4,
-			Hint: "use goto inside a func { } block with matching label <name>:",
+			Hint:    "use goto inside a func { } block with matching label <name>:",
 		})
 		return true, 1
 
@@ -811,7 +728,7 @@ func (sh *Shell) evalScript2(raw string) (bool, int) {
 
 	// isnull / isnil — check if a value is empty/null
 	case strings.HasPrefix(lower, "isnull "), strings.HasPrefix(lower, "isnil "), strings.HasPrefix(lower, "isnone "):
-		rest := strings.TrimSpace(raw[strings.Index(raw, " ")+1:])
+		rest := strings.TrimSpace(raw[strings.Index(raw," ")+1:])
 		v := sh.evalExpr(rest)
 		lv := strings.ToLower(strings.TrimSpace(v))
 		if lv == "" || lv == "null" || lv == "nil" || lv == "none" || lv == "undefined" {
@@ -824,7 +741,7 @@ func (sh *Shell) evalScript2(raw string) (bool, int) {
 	// typeof <expr> — display the runtime type of a value
 	case strings.HasPrefix(lower, "typeof "):
 		rest := strings.TrimSpace(raw[7:])
-		v := sh.evalExpr(rest)
+		v    := sh.evalExpr(rest)
 		kind := detectKind(v)
 		fmt.Printf("\n  %s%s%s  %s\"%s\"%s\n\n", ansiBold+ansiCyan, kind, ansiReset, ansiGrey, v, ansiReset)
 		return true, 0
@@ -877,37 +794,23 @@ func (sh *Shell) evalScript2(raw string) (bool, int) {
 // tryFuncCallCapture wraps tryFuncCallAssign for use in evalScript2.
 func (sh *Shell) tryFuncCallCapture(raw string) (int, bool) {
 	eqIdx := strings.Index(raw, "=")
-	if eqIdx <= 0 {
-		return 0, false
-	}
-	if eqIdx+1 < len(raw) && raw[eqIdx+1] == '=' {
-		return 0, false
-	}
-	if eqIdx > 0 && (raw[eqIdx-1] == '!' || raw[eqIdx-1] == '<' || raw[eqIdx-1] == '>') {
-		return 0, false
-	}
+	if eqIdx <= 0 { return 0, false }
+	if eqIdx+1 < len(raw) && raw[eqIdx+1] == '=' { return 0, false }
+	if eqIdx > 0 && (raw[eqIdx-1] == '!' || raw[eqIdx-1] == '<' || raw[eqIdx-1] == '>') { return 0, false }
 
 	lhs := strings.TrimSpace(raw[:eqIdx])
-	if !isIdent(lhs) {
-		return 0, false
-	}
+	if !isIdent(lhs) { return 0, false }
 
 	rhs := strings.TrimSpace(raw[eqIdx+1:])
 	// Must reference a known user function
 	firstWord := ""
 	for _, ch := range rhs {
-		if ch == '(' || ch == ' ' || ch == '\t' {
-			break
-		}
+		if ch == '(' || ch == ' ' || ch == '\t' { break }
 		firstWord += string(ch)
 	}
-	if _, ok := sh.funcs[firstWord]; !ok {
-		return 0, false
-	}
+	if _, ok := sh.funcs[firstWord]; !ok { return 0, false }
 	// Has parens → definitely a call expression
-	if !strings.Contains(rhs, "(") {
-		return 0, false
-	}
+	if !strings.Contains(rhs, "(") { return 0, false }
 
 	_, captured := sh.tryFuncCallAssign(raw)
 	return 0, captured
@@ -924,89 +827,16 @@ func errDivZeroInline(src string) error {
 	}
 }
 
-// evalAssert evaluates:  assert <condition> ["failure message"]
-// Passes silently on success; prints E014 AssertionError and returns 1 on failure.
-func (sh *Shell) evalAssert(raw string) int {
-	rest := strings.TrimSpace(raw[7:]) // strip "assert "
-
-	// Try to split off a trailing quoted message
-	msg := ""
-	if idx := strings.LastIndex(rest, `"`); idx > 0 {
-		start := strings.LastIndex(rest[:idx], `"`)
-		if start >= 0 && start < idx {
-			msg = rest[start+1 : idx]
-			rest = strings.TrimSpace(rest[:start])
-		}
-	}
-
-	if sh.evalCond(rest) {
-		// Assertion passed — print a small green tick in interactive sessions
-		if sh.currentLine == 0 {
-			fmt.Printf("  %s✔ assert passed%s  %s%s%s\n", ansiGreen, ansiReset, ansiGrey, rest, ansiReset)
-		}
-		return 0
-	}
-
-	// Assertion failed
-	detail := ""
-	if msg != "" {
-		detail = msg
-	} else {
-		detail = fmt.Sprintf("condition was: %s", rest)
-	}
-	loc := ""
-	if sh.currentFile != "" {
-		loc = sh.currentFile
-		if sh.currentLine > 0 {
-			loc = fmt.Sprintf("%s:%d", sh.currentFile, sh.currentLine)
-		}
-	}
-	fullMsg := "assertion failed"
-	if msg != "" {
-		fullMsg = msg
-	}
-
-	locDetail := ""
-	if loc != "" {
-		locDetail = "  at " + loc
-	}
-
-	PrintError(&ShellError{
-		Code:    "E014",
-		Kind:    "AssertionError",
-		Message: fullMsg,
-		Source:  sh.currentSrc,
-		Line:    sh.currentLine,
-		Col:     -1,
-		Detail:  detail + locDetail,
-		Hint:    "the condition evaluated to false — check the values with:  vars",
-	})
-	sh.thrownMsg = fullMsg
-	sh.lastErrMsg = fullMsg
-	return 1
-}
 
 // detectKind returns a human-readable type name for a stored value string.
 func detectKind(v string) string {
 	lv := strings.ToLower(strings.TrimSpace(v))
-	if lv == "" || lv == "null" || lv == "nil" || lv == "none" {
-		return "null"
-	}
-	if lv == "true" || lv == "false" {
-		return "bool"
-	}
-	if _, err := strconv.ParseInt(v, 10, 64); err == nil {
-		return "int"
-	}
-	if _, err := strconv.ParseFloat(v, 64); err == nil {
-		return "float"
-	}
-	if strings.HasPrefix(v, "[") {
-		return "array"
-	}
-	if strings.HasPrefix(v, "{") {
-		return "map"
-	}
+	if lv == "" || lv == "null" || lv == "nil" || lv == "none" { return "null" }
+	if lv == "true" || lv == "false" { return "bool" }
+	if _, err := strconv.ParseInt(v, 10, 64); err == nil { return "int" }
+	if _, err := strconv.ParseFloat(v, 64); err == nil { return "float" }
+	if strings.HasPrefix(v, "[") { return "array" }
+	if strings.HasPrefix(v, "{") { return "map" }
 	return "string"
 }
 

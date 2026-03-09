@@ -298,6 +298,18 @@ func (sh *Shell) evalRHS(rhs, src string) string {
 			return sh.evalRHS(elsePart, src)
 		}
 	}
+	// range expression: range 5 / range 1 10 / range 1 10 2
+	if v, ok := sh.evalRangeExprEval(rhs); ok { return v }
+	// ?? null-coalescing
+	if qIdx := strings.Index(rhs, "??"); qIdx > 0 {
+		primary  := strings.TrimSpace(rhs[:qIdx])
+		fallback := strings.TrimSpace(rhs[qIdx+2:])
+		val := sh.evalExpr(primary)
+		if val == "" || val == "null" || val == "nil" || val == "undefined" {
+			return sh.evalExpr(stripQuotes(fallback))
+		}
+		return val
+	}
 	if strings.HasPrefix(strings.ToLower(rhs), "if ") { return sh.evalInlineIf(rhs, src) }
 	// Advanced data type literals: map{}, set{}, stack{}, queue{}, tuple(), matrix()
 	if v, ok := sh.evalDataTypeLiteral(rhs); ok { return v }
@@ -471,6 +483,80 @@ func (sh *Shell) evalExpr(expr string) string {
 	expr = strings.TrimSpace(expr)
 	if expr == "" { return "" }
 
+	// ── Expand $(...) and ?(...)  before any other evaluation ─────────────
+	// This handles:  return $(bc $a * $b)  /  x = $(date +%s) + 1
+	if strings.Contains(expr, "$(") || strings.Contains(expr, "?(") {
+		expr = sh.expandDollarParens(sh.expandVars(expr))
+		expr = strings.TrimSpace(expr)
+		if expr == "" { return "" }
+	}
+
+	// ── Expand backtick subshells ─────────────────────────────────────────
+	if strings.Contains(expr, "`") {
+		expr = sh.expandBackticks(expr)
+		expr = strings.TrimSpace(expr)
+	}
+
+	// ── Ternary: cond ? trueVal : falseVal ────────────────────────────────
+	// e.g.  $x > 0 ? "positive" : "negative"
+	if qIdx := findOutside(expr, " ? "); qIdx >= 0 {
+		if cIdx := findOutside(expr, " : "); cIdx > qIdx {
+			condPart  := strings.TrimSpace(expr[:qIdx])
+			truePart  := strings.TrimSpace(expr[qIdx+3:cIdx])
+			falsePart := strings.TrimSpace(expr[cIdx+3:])
+			if sh.evalCond(condPart) {
+				return sh.evalExpr(truePart)
+			}
+			return sh.evalExpr(falsePart)
+		}
+	}
+
+	// ── Type-check builtins: int(x), float(x), str(x), bool(x), len(x) ──
+	if strings.HasPrefix(expr,"int(") && strings.HasSuffix(expr,")") {
+		inner := sh.evalExpr(expr[4:len(expr)-1])
+		f,_ := strconv.ParseFloat(inner,64)
+		return strconv.Itoa(int(f))
+	}
+	if strings.HasPrefix(expr,"float(") && strings.HasSuffix(expr,")") {
+		inner := sh.evalExpr(expr[6:len(expr)-1])
+		f,_ := strconv.ParseFloat(inner,64)
+		return strconv.FormatFloat(f,'f',-1,64)
+	}
+	if strings.HasPrefix(expr,"str(") && strings.HasSuffix(expr,")") {
+		return sh.evalExpr(expr[4:len(expr)-1])
+	}
+	if strings.HasPrefix(expr,"bool(") && strings.HasSuffix(expr,")") {
+		inner := sh.evalExpr(expr[5:len(expr)-1])
+		lower := strings.ToLower(inner)
+		if lower=="true"||lower=="1"||lower=="yes" { return "true" }
+		return "false"
+	}
+	if strings.HasPrefix(expr,"len(") && strings.HasSuffix(expr,")") {
+		inner := sh.evalExpr(expr[4:len(expr)-1])
+		return strconv.Itoa(len([]rune(inner)))
+	}
+	if strings.HasPrefix(expr,"abs(") && strings.HasSuffix(expr,")") {
+		inner := sh.evalExpr(expr[4:len(expr)-1])
+		f,_ := strconv.ParseFloat(inner,64)
+		return fmtNum(math.Abs(f))
+	}
+	if strings.HasPrefix(expr,"min(") && strings.HasSuffix(expr,")") {
+		parts := strings.SplitN(expr[4:len(expr)-1],",",2)
+		if len(parts)==2 {
+			a,_ := strconv.ParseFloat(sh.evalExpr(parts[0]),64)
+			b,_ := strconv.ParseFloat(sh.evalExpr(parts[1]),64)
+			if a < b { return fmtNum(a) }; return fmtNum(b)
+		}
+	}
+	if strings.HasPrefix(expr,"max(") && strings.HasSuffix(expr,")") {
+		parts := strings.SplitN(expr[4:len(expr)-1],",",2)
+		if len(parts)==2 {
+			a,_ := strconv.ParseFloat(sh.evalExpr(parts[0]),64)
+			b,_ := strconv.ParseFloat(sh.evalExpr(parts[1]),64)
+			if a > b { return fmtNum(a) }; return fmtNum(b)
+		}
+	}
+
 	// ${VAR...}
 	if strings.HasPrefix(expr,"${") && strings.HasSuffix(expr,"}") {
 		return sh.interpolate(expr)
@@ -511,6 +597,15 @@ func (sh *Shell) evalExpr(expr string) string {
 		base, _ := strconv.ParseFloat(sh.evalExpr(expr[:idx]),64)
 		exp, _  := strconv.ParseFloat(sh.evalExpr(expr[idx+4:]),64)
 		return fmtNum(math.Pow(base,exp))
+	}
+	// string * N  (string repeat):  "ha" * 3 → "hahaha"
+	if idx := strings.LastIndex(expr," * "); idx >= 0 {
+		lhs := strings.TrimSpace(expr[:idx])
+		rhs := strings.TrimSpace(expr[idx+3:])
+		if strings.HasPrefix(lhs,`"`) || strings.HasPrefix(lhs,"'") {
+			n,_ := strconv.Atoi(sh.evalExpr(rhs))
+			if n > 0 { return strings.Repeat(stripQuotes(sh.evalExpr(lhs)), n) }
+		}
 	}
 	// arithmetic
 	if r, ok := tryArith(sh, expr); ok { return r }
@@ -875,18 +970,25 @@ func (sh *Shell) evalFor(raw string) int {
 
 func (sh *Shell) evalIterable(expr, src string) []string {
 	expr = strings.TrimSpace(expr)
-	if strings.HasPrefix(strings.ToLower(expr),"range") {
-		inner := strings.Trim(expr[5:],"()")
-		if strings.Contains(inner,"..") {
-			p := strings.SplitN(inner,"..",2); a,b:=0,0
-			fmt.Sscanf(sh.evalExpr(strings.TrimSpace(p[0])),"%d",&a)
-			fmt.Sscanf(sh.evalExpr(strings.TrimSpace(p[1])),"%d",&b)
-			return makeRange(a,b)
+	low := strings.ToLower(expr)
+	// range N  /  range A B  /  range A B S  /  range(A,B)
+	if strings.HasPrefix(low, "range") {
+		inner := strings.TrimSpace(expr[5:])
+		// Strip parens: range(1,10) or range(1..10)
+		inner = strings.Trim(inner, "()")
+		// Dot-dot syntax: range(1..10)
+		if strings.Contains(inner, "..") {
+			p := strings.SplitN(inner, "..", 2)
+			a, b := 0, 0
+			fmt.Sscanf(sh.evalExpr(strings.TrimSpace(p[0])), "%d", &a)
+			fmt.Sscanf(sh.evalExpr(strings.TrimSpace(p[1])), "%d", &b)
+			return makeRange(a, b)
 		}
-		p := strings.SplitN(inner,",",2); a,b:=0,0
-		fmt.Sscanf(sh.evalExpr(strings.TrimSpace(p[0])),"%d",&a)
-		if len(p)>1 { fmt.Sscanf(sh.evalExpr(strings.TrimSpace(p[1])),"%d",&b) }
-		return makeRange(a,b)
+		// Comma syntax: range(0,10) → use evalRangeExpr with space-separated
+		inner = strings.ReplaceAll(inner, ",", " ")
+		// Use evalRangeExpr for full range support (including step)
+		arr := sh.evalRangeExpr(inner)
+		return sh.arrayItems2(arr)
 	}
 	if strings.HasPrefix(expr,"[") && strings.HasSuffix(expr,"]") { return sh.parseArrayLiteral(expr) }
 	if strings.HasPrefix(expr,"`") && strings.HasSuffix(expr,"`") {
@@ -899,7 +1001,32 @@ func (sh *Shell) evalIterable(expr, src string) []string {
 		if strings.HasPrefix(val,"[") { return sh.arrayItems(expr[1:]) }
 		return strings.Fields(val)
 	}
+	// Bare variable name
+	if isIdent(expr) {
+		val := sh.getVar(expr)
+		if strings.HasPrefix(val,"[") { return sh.arrayItems(expr) }
+		if val != "" { return strings.Fields(val) }
+	}
 	return strings.Fields(expr)
+}
+
+// arrayItems2 extracts items from an inline array string (not a variable lookup).
+func (sh *Shell) arrayItems2(raw string) []string {
+	if raw == "" { return nil }
+	if strings.HasPrefix(raw, "[") && strings.HasSuffix(raw, "]") {
+		inner := raw[1:len(raw)-1]
+		if strings.TrimSpace(inner) == "" { return nil }
+		if strings.Contains(inner, arraySep) {
+			var out []string
+			for _, p := range strings.Split(inner, arraySep) {
+				if t := strings.TrimSpace(p); t != "" { out = append(out, t) }
+			}
+			return out
+		}
+		// Single element
+		return []string{strings.TrimSpace(inner)}
+	}
+	return strings.Fields(raw)
 }
 
 func makeRange(a,b int) []string {
@@ -1063,7 +1190,7 @@ func (sh *Shell) callUserFunc(fn *UserFunc, args []string, src string) int {
 		if i<len(args){sh.vars[p]=sh.evalExpr(args[i])}else{sh.vars[p]=""}
 	}
 	if len(args)>len(fn.Params) { sh.vars["_args"]=strings.Join(args[len(fn.Params):]," ") }
-	sh.vars["_argc"] = strconv.Itoa(len(args))
+	sh.vars["_argc"]  = strconv.Itoa(len(args))
 	sh.vars["_return"] = ""
 	outerDefer := sh.deferStack
 	sh.deferStack = nil
@@ -1073,18 +1200,47 @@ func (sh *Shell) callUserFunc(fn *UserFunc, args []string, src string) int {
 	for i := len(sh.deferStack)-1; i >= 0; i-- { sh.execLine(sh.deferStack[i]) }
 	sh.deferStack = outerDefer
 	for p,v := range saved { sh.vars[p]=v }
+
+	// When called inside a backtick/subshell capture, surface _return
+	// into captureOut so the caller receives the function's return value.
+	if sh.captureMode && sh.captureOut.Len() == 0 && sh.vars["_return"] != "" {
+		sh.captureOut.WriteString(sh.vars["_return"])
+	}
 	return code
 }
 
 // ─── Subshell / backtick expansion ──────────────────────────────────────────
 
 func (sh *Shell) runSubshell(cmd string) string {
-	cmd=strings.TrimSpace(cmd); if cmd==""{return ""}
-	old:=sh.captureMode; sh.captureMode=true; sh.captureOut.Reset()
-	sh.execLine(cmd)
-	sh.captureMode=false; out:=strings.TrimRight(sh.captureOut.String(),"\n ")
-	sh.captureOut.Reset(); sh.captureMode=old
-	return out
+	cmd = strings.TrimSpace(cmd)
+	if cmd == "" { return "" }
+
+	// Save capture state
+	oldMode := sh.captureMode
+	oldOut  := sh.captureOut.String()
+	sh.captureMode = true
+	sh.captureOut.Reset()
+
+	code := sh.execLine(cmd)
+	_ = code
+
+	captured := strings.TrimRight(sh.captureOut.String(), "\n ")
+
+	// If nothing was printed to captureOut but the command was a user function,
+	// use its _return value instead (functions return via _return, not stdout)
+	if captured == "" {
+		if ret := sh.vars["_return"]; ret != "" {
+			captured = ret
+		}
+	}
+
+	// Restore
+	sh.captureMode = oldMode
+	sh.captureOut.Reset()
+	if oldOut != "" {
+		sh.captureOut.WriteString(oldOut)
+	}
+	return captured
 }
 
 func (sh *Shell) expandBackticks(s string) string {
