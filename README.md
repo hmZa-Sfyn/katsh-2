@@ -17,7 +17,7 @@ Katsh is a terminal shell written in Go that turns every command output into a s
 
 ---
 
-## Install
+## Install!
 
 ```bash
 git clone <repo>
